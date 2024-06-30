@@ -1,22 +1,30 @@
+# React + TypeScript + Vite
 
-# IntuneDepot
+This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
 
-Centralized repository for Intune app deployment scripts and automation tools.  Leveraging Microsoft Graph for streamlined management of Microsoft Endpoint Manager (Intune).
+Currently, two official plugins are available:
 
-**Features:**
+- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react/README.md) uses [Babel](https://babeljs.io/) for Fast Refresh
+- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
 
-* **Script Library:**  Pre-built, customizable scripts for common Intune tasks (e.g., app deployments, configuration profiles).
-* **Automation:**  Integration with CW Automate for enhanced workflow efficiency.
-* **Graph API Integration:**  Harness the power of the Microsoft Graph API for robust Intune management capabilities.
+## Expanding the ESLint configuration
 
-**Folders:**
+If you are developing a production application, we recommend updating the configuration to enable type aware lint rules:
 
-* automateScripts : Holds CW Automate scripts used at Resultant
+- Configure the top-level `parserOptions` property like this:
 
-**Contribution:**
+```js
+export default {
+  // other rules...
+  parserOptions: {
+    ecmaVersion: 'latest',
+    sourceType: 'module',
+    project: ['./tsconfig.json', './tsconfig.node.json'],
+    tsconfigRootDir: __dirname,
+  },
+}
+```
 
-Contributions are welcome! Feel free to submit pull requests with new scripts, improvements, or bug fixes.
-
-**License:**
-
-This project is licensed under the [LICENSE NAME HERE] - see the LICENSE file for details.
+- Replace `plugin:@typescript-eslint/recommended` to `plugin:@typescript-eslint/recommended-type-checked` or `plugin:@typescript-eslint/strict-type-checked`
+- Optionally add `plugin:@typescript-eslint/stylistic-type-checked`
+- Install [eslint-plugin-react](https://github.com/jsx-eslint/eslint-plugin-react) and add `plugin:react/recommended` & `plugin:react/jsx-runtime` to the `extends` list
