@@ -1,0 +1,14 @@
+services:
+  db2rest:
+    image: kdhrubo/db2rest:latest
+    ports:
+      - "8090:8090"
+    environment:
+      - DB_URL=${DB_URL}
+      - DB_USER=${DB_USER}
+      - DB_PASSWORD=${DB_PASSWORD}
+      - SERVER_PORT=8090
+networks:
+  default:
+      name: "intune-depot-app"
+      external: true

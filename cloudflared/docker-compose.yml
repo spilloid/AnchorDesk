@@ -1,0 +1,11 @@
+# docker run cloudflare/cloudflared:latest tunnel --no-autoupdate run --token eyJhIjoiNDgwZDZlYzZhYTI5ODdlYTM5YWNjNTAxMWY3YWMxMzUiLCJ0IjoiMTc5MWUzZGItNWMxZC00NmVmLWIzMDctMDM5OGQ1MGQ4YzgzIiwicyI6Ik0yUm1aakpsWkdNdFpESmlNQzAwTkdZekxXSTVNRGt0WVdReE9XVTBORGM1TWpVMiJ9
+services:
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    command: tunnel --no-autoupdate run --token eyJhIjoiNDgwZDZlYzZhYTI5ODdlYTM5YWNjNTAxMWY3YWMxMzUiLCJ0IjoiMTc5MWUzZGItNWMxZC00NmVmLWIzMDctMDM5OGQ1MGQ4YzgzIiwicyI6Ik0yUm1aakpsWkdNdFpESmlNQzAwTkdZekxXSTVNRGt0WVdReE9XVTBORGM1TWpVMiJ9
+    networks:
+      - intune-depot-app
+networks:
+  intune-depot-app:
+    external: true
+

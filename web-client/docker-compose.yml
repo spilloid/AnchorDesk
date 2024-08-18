@@ -1,0 +1,17 @@
+services:
+  vite-app:
+    build:
+      context: .
+      dockerfile: Dockerfile # Assuming you have a Dockerfile
+    ports:
+      - "5173:5173" # Map host port 3001 to container's 3000 (Vite default)
+    volumes:
+      - ./src:/app/src # Mount your project's src folder
+      - /app/node_modules # Avoid rebuilding node_modules inside the container
+    environment:
+      - CHOKIDAR_USEPOLLING=true # Enable file watching on some systems
+    command: npm run dev # Start Vite's development server
+networks:
+  default:
+      name: "intune-depot-app"
+      external: true
