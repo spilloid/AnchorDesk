@@ -9,8 +9,17 @@ import {
   ThemeProvider,
   Toolbar,
   Grid,
+  Dialog,
+  DialogContent,
+  DialogTitle,
+  IconButton,
+  TextField,
+  Button,
 } from "@mui/material";
 import { createTheme } from "@mui/material/styles";
+import CloseIcon from "@mui/icons-material/Close";
+import EditIcon from "@mui/icons-material/Edit";
+import SaveIcon from "@mui/icons-material/Save";
 import DashboardAppBar from "./components/DashboardAppBar";
 import DashboardDrawer from "./components/DashboardDrawer";
 import { Ticket, Technician, TimeEntry } from "./interfaces";
@@ -35,6 +44,10 @@ function App() {
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<Error | null>(null);
+  const [selectedTicket, setSelectedTicket] = useState<Ticket | null>(null);
+  const [dialogOpen, setDialogOpen] = useState<boolean>(false);
+  const [isEditing, setIsEditing] = useState<boolean>(false);
+  const [editedTitle, setEditedTitle] = useState<string>("");
 
   const toggleDrawer = () => {
     setDrawerOpen(!drawerOpen);
@@ -92,8 +105,25 @@ function App() {
   };
 
   const handleCardClick = (ticket: Ticket) => {
-    console.log("Time Entries for Ticket #", ticket.ticketnumber);
-    console.log(ticket.timeEntries);
+    setSelectedTicket(ticket);
+    setEditedTitle(ticket.ticketSummary); // Initialize with ticket title
+    setDialogOpen(true);
+  };
+
+  const handleDialogClose = () => {
+    setDialogOpen(false);
+    setSelectedTicket(null);
+    setIsEditing(false); // Reset edit mode when closing
+  };
+
+  const handleEditClick = () => {
+    setIsEditing(true);
+  };
+
+  const handleSaveClick = () => {
+    setIsEditing(false);
+    console.log("New Title:", editedTitle);
+    // Logic to save the updated title would go here
   };
 
   return (
@@ -163,6 +193,78 @@ function App() {
             <Typography variant="body1">No tickets found.</Typography>
           )}
         </Box>
+
+        {/* Dialog for showing ticket details */}
+        {selectedTicket && (
+          <Dialog open={dialogOpen} onClose={handleDialogClose} maxWidth="md" fullWidth>
+            <DialogTitle sx={{ display: "flex", alignItems: "center" }}>
+              {isEditing ? (
+                <TextField
+                  value={editedTitle}
+                  onChange={(e) => setEditedTitle(e.target.value)}
+                  variant="outlined"
+                  fullWidth
+                />
+              ) : (
+                `Ticket #${selectedTicket.ticketnumber} - ${editedTitle}`
+              )}
+              <IconButton
+                aria-label="close"
+                onClick={handleDialogClose}
+                sx={{
+                  position: "absolute",
+                  right: 8,
+                  top: 8,
+                  color: (theme) => theme.palette.grey[500],
+                }}
+              >
+                <CloseIcon />
+              </IconButton>
+              {isEditing ? (
+                <Button
+                  variant="contained"
+                  color="primary"
+                  onClick={handleSaveClick}
+                  startIcon={<SaveIcon />}
+                  sx={{ ml: 2 }}
+                >
+                  Save
+                </Button>
+              ) : (
+                <IconButton
+                  aria-label="edit"
+                  onClick={handleEditClick}
+                  sx={{ ml: 2 }}
+                >
+                  <EditIcon />
+                </IconButton>
+              )}
+            </DialogTitle>
+            <DialogContent dividers>
+              <Typography variant="h6" gutterBottom>
+                {selectedTicket.ticketSummary}
+              </Typography>
+              <Typography variant="body1" gutterBottom>
+                Priority: {selectedTicket.priority}
+              </Typography>
+              <Typography variant="body1" gutterBottom>
+                Company: {selectedTicket.company.CompanyName} (Acronym:{" "}
+                {selectedTicket.company.Acronym})
+              </Typography>
+              <Typography variant="body1" gutterBottom>
+                Engagement Manager: {selectedTicket.company.PrimaryEngagementMgr}
+              </Typography>
+              <Box sx={{ mt: 2 }}>
+                <Typography variant="subtitle1">Technicians:</Typography>
+                {renderTechnicians(selectedTicket.technicians)}
+              </Box>
+              <Box sx={{ mt: 2 }}>
+                <Typography variant="subtitle1">Time Entries:</Typography>
+                {renderTimeEntries(selectedTicket.timeEntries)}
+              </Box>
+            </DialogContent>
+          </Dialog>
+        )}
       </Box>
     </ThemeProvider>
   );
