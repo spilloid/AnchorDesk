@@ -1,7 +1,9 @@
-FROM oven/bun:latest
+FROM node:slim
 
-COPY package.json ./
-COPY bun.lockb ./
-COPY src ./
+WORKDIR /app
 
-RUN bun install
+COPY package*.json ./
+RUN npm install
+
+COPY . .
+CMD ["npm","start"]

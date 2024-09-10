@@ -7,12 +7,10 @@ services:
       - "5173:5173" # Map host port 3001 to container's 3000 (Vite default)
     volumes:
       - ./web-client/src:/app/src # Mount your project's src folder
-      - /app/node_modules # Avoid rebuilding node_modules inside the container
+      - ./web-client/node_modules # Avoid rebuilding node_modules inside the container
     environment:
       - CHOKIDAR_USEPOLLING=true # Enable file watching on some systems
     command: npm run dev # Start Vite's development server
-    networks:
-          - intune-depot-app
   db:
     image: mariadb
     restart: always
@@ -26,13 +24,15 @@ services:
     image: adminer
     restart: always
     ports:
-      - 8080:8080
+      - 8081:8080
+  backend:
+    build:
+      context: ./backend
+    ports:
+      - 8060:8060
 volumes:
   mariadb:
 networks:
   default:
       name: "intune-depot-app"
-      external: true
-networks:
-    intune-depot-app:
       external: true
