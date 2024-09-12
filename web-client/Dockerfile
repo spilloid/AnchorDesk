@@ -1,8 +1,9 @@
 FROM node:slim
 
-WORKDIR /app
+WORKDIR /web-client
 
 COPY package*.json ./
+
 RUN npm install
 
-COPY . .
+CMD ["npm","run","dev"]

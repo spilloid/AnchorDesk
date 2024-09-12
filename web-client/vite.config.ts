@@ -6,7 +6,7 @@ export default defineConfig({
   server: {
     proxy: {
       '/api': {
-        target: 'http://db2rest:8090/v1/rdbms/db',
+        target: 'http://backend:8060/',
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/api/, ''),
       }

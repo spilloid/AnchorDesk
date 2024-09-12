@@ -6,7 +6,8 @@ services:
     ports:
       - "5173:5173" # Map host port 3001 to container's 3000 (Vite default)
     volumes:
-      - ./web-client:/app # Mount your project's src folder
+      - ./web-client:/web-client # Mount your project's src folder
+      - /web-client/node_modules
     environment:
       - CHOKIDAR_USEPOLLING=true # Enable file watching on some systems
     command: npm run dev # Start Vite's development server
@@ -29,6 +30,9 @@ services:
       context: ./backend
     ports:
       - 8060:8060
+    volumes:
+      - ./backend:/backend # Mount your project's src folder
+      - /backend/node_modules
 volumes:
   mariadb:
 networks:

@@ -1,8 +1,15 @@
 import { Box, Button, Grid, Typography } from "@mui/material";
 
-const CWManageView: React.FC = () => {
+interface CWManageViewProps {
+  fetchTickets: () => void; // Add fetchTickets as a prop
+}
+
+const CWManageView: React.FC<CWManageViewProps> = ({ fetchTickets }) => {
   const handleSyncAction = (action: string) => {
     console.log(`Executing action: ${action}`);
+    if (action === "Force Sync Ticket") {
+      fetchTickets(); // Trigger fetchTickets when "Force Sync Ticket" is clicked
+    }
   };
 
   return (
