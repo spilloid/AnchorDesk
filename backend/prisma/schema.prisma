@@ -1,0 +1,280 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id          Int       @id @default(autoincrement())
+  oidcSub     String    @unique @map("oidc_sub") @db.VarChar(255)
+  username    String    @db.VarChar(100)
+  displayName String?   @map("display_name") @db.VarChar(150)
+  email       String?   @db.VarChar(255)
+  role        UserRole  @default(technician)
+  lastSeenAt  DateTime? @map("last_seen_at")
+  createdAt   DateTime  @default(now()) @map("created_at")
+
+  assignedTickets Ticket[] @relation("AssignedTickets")
+  authoredNotes   Note[]   @relation("AuthoredNotes")
+
+  @@map("users")
+}
+
+model Ticket {
+  id               Int          @id @default(autoincrement())
+  ticketNumber     String?      @map("ticket_number") @db.VarChar(50)
+  title            String       @db.VarChar(255)
+  summary          String?      @db.VarChar(500)
+  description      String?      @db.Text
+  status           String       @default("New") @db.VarChar(100)
+  priority         String?      @db.VarChar(50)
+  companyName      String?      @map("company_name") @db.VarChar(150)
+  assignee         String?      @db.VarChar(100)
+  assigneeId       Int?         @map("assignee_id")
+  source           TicketSource @default(local)
+  externalId       String?      @map("external_id") @db.VarChar(100)
+  externalProvider String?      @map("external_provider") @db.VarChar(50)
+  closedAt         DateTime?    @map("closed_at")
+  createdAt        DateTime     @default(now()) @map("created_at")
+  updatedAt        DateTime     @updatedAt @map("updated_at")
+
+  assigneeUser User?        @relation("AssignedTickets", fields: [assigneeId], references: [id])
+  notes        Note[]
+  syncEntries  SyncLog[]
+  deviceLinks  DeviceLink[]
+  scriptJobs   ScriptJob[]
+
+  @@unique([externalId, externalProvider])
+  @@map("tickets")
+}
+
+model Note {
+  id         Int       @id @default(autoincrement())
+  ticketId   Int       @map("ticket_id")
+  content    String    @db.Text
+  author     String    @db.VarChar(150)
+  authorId   Int?      @map("author_id")
+  noteType   NoteType  @default(note) @map("note_type")
+  timeStart  DateTime? @map("time_start")
+  timeStop   DateTime? @map("time_stop")
+  externalId String?   @map("external_id") @db.VarChar(100)
+  createdAt  DateTime  @default(now()) @map("created_at")
+  updatedAt  DateTime  @updatedAt @map("updated_at")
+
+  ticket     Ticket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  authorUser User?  @relation("AuthoredNotes", fields: [authorId], references: [id])
+
+  @@map("notes")
+}
+
+// Polymorphic append-only log. entityType + entityId identify the target
+// (ticket, note, device, probe, ...). No hard FK so any entity can be audited.
+model AuditLog {
+  id         BigInt      @id @default(autoincrement())
+  entityType String      @map("entity_type") @db.VarChar(50)
+  entityId   Int         @map("entity_id")
+  action     AuditAction
+  changedBy  String?     @map("changed_by") @db.VarChar(255)
+  oldValue   Json?       @map("old_value")
+  newValue   Json?       @map("new_value")
+  occurredAt DateTime    @default(now()) @map("occurred_at")
+
+  @@index([entityType, entityId], map: "idx_audit_entity")
+  @@index([occurredAt], map: "idx_audit_time")
+  @@map("audit_log")
+}
+
+model SyncProvider {
+  id           Int          @id @default(autoincrement())
+  name         String       @unique @db.VarChar(100)
+  type         ProviderType
+  config       Json
+  enabled      Boolean      @default(true)
+  lastSyncedAt DateTime?    @map("last_synced_at")
+  createdAt    DateTime     @default(now()) @map("created_at")
+
+  syncLogs SyncLog[]
+
+  @@map("sync_providers")
+}
+
+model SyncLog {
+  id         BigInt        @id @default(autoincrement())
+  providerId Int           @map("provider_id")
+  externalId String?       @map("external_id") @db.VarChar(100)
+  internalId Int?          @map("internal_id")
+  direction  SyncDirection
+  status     SyncStatus
+  message    String?       @db.Text
+  syncedAt   DateTime      @default(now()) @map("synced_at")
+
+  provider SyncProvider @relation(fields: [providerId], references: [id], onDelete: Cascade)
+  ticket   Ticket?      @relation(fields: [internalId], references: [id])
+
+  @@index([providerId, syncedAt], map: "idx_sync_provider")
+  @@map("sync_log")
+}
+
+// A device record. Local-first: the source of truth lives here, just like
+// tickets. RMM / scanner adapters (netviz, tactical_rmm) upsert into this table
+// via DeviceProvider; standalone use needs no external system at all.
+model Device {
+  id               Int          @id @default(autoincrement())
+  hostname         String?      @db.VarChar(255)
+  displayName      String?      @map("display_name") @db.VarChar(255)
+  ipAddress        String?      @map("ip_address") @db.VarChar(45)
+  macAddress       String?      @map("mac_address") @db.VarChar(17)
+  vendor           String?      @db.VarChar(150)
+  os               String?      @db.VarChar(150)
+  deviceType       String?      @map("device_type") @db.VarChar(100)
+  openPorts        Json?        @map("open_ports")
+  status           String       @default("unknown") @db.VarChar(50)
+  companyName      String?      @map("company_name") @db.VarChar(150)
+  source           DeviceSource @default(local)
+  probeId          Int?         @map("probe_id")
+  externalId       String?      @map("external_id") @db.VarChar(100)
+  externalProvider String?      @map("external_provider") @db.VarChar(50)
+  metadata         Json?
+  firstSeenAt      DateTime?    @map("first_seen_at")
+  lastSeenAt       DateTime?    @map("last_seen_at")
+  createdAt        DateTime     @default(now()) @map("created_at")
+  updatedAt        DateTime     @updatedAt @map("updated_at")
+
+  probe       Probe?       @relation(fields: [probeId], references: [id])
+  ticketLinks DeviceLink[]
+  scriptJobs  ScriptJob[]
+
+  @@unique([externalId, externalProvider])
+  @@index([companyName])
+  @@map("devices")
+}
+
+// A script execution against a device through its RMM (the "act on machines"
+// half of the thesis). Tracks run-now and scheduled invocations + their output.
+model ScriptJob {
+  id           Int             @id @default(autoincrement())
+  deviceId     Int             @map("device_id")
+  ticketId     Int?            @map("ticket_id")
+  runner       String          @db.VarChar(50)
+  scriptRef    String          @map("script_ref") @db.VarChar(150)
+  scriptName   String?         @map("script_name") @db.VarChar(255)
+  args         Json?
+  status       ScriptJobStatus @default(queued)
+  output       String?         @db.Text
+  exitCode     Int?            @map("exit_code")
+  scheduledFor DateTime?       @map("scheduled_for")
+  createdBy    String?         @map("created_by") @db.VarChar(255)
+  createdAt    DateTime        @default(now()) @map("created_at")
+  startedAt    DateTime?       @map("started_at")
+  completedAt  DateTime?       @map("completed_at")
+
+  device Device  @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+  ticket Ticket? @relation(fields: [ticketId], references: [id], onDelete: SetNull)
+
+  @@index([deviceId])
+  @@index([status, scheduledFor])
+  @@map("script_jobs")
+}
+
+// Many-to-many join: a ticket can reference multiple devices and vice versa.
+model DeviceLink {
+  id        Int      @id @default(autoincrement())
+  ticketId  Int      @map("ticket_id")
+  deviceId  Int      @map("device_id")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  ticket Ticket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  device Device @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+
+  @@unique([ticketId, deviceId])
+  @@map("device_links")
+}
+
+// A deployed scanner/agent (e.g. a netviz instance on a customer LAN) that
+// reports device records inbound. Authenticates with apiKey; heartbeats update
+// status + lastSeenAt so the UI can show "probe online" on a ticket.
+model Probe {
+  id          Int         @id @default(autoincrement())
+  name        String      @db.VarChar(150)
+  apiKey      String      @unique @map("api_key") @db.VarChar(100)
+  kind        String      @default("netviz") @db.VarChar(50)
+  companyName String?     @map("company_name") @db.VarChar(150)
+  cidr        String?     @db.VarChar(100)
+  version     String?     @db.VarChar(50)
+  status      ProbeStatus @default(offline)
+  lastSeenAt  DateTime?   @map("last_seen_at")
+  createdAt   DateTime    @default(now()) @map("created_at")
+
+  devices Device[]
+
+  @@map("probes")
+}
+
+enum UserRole {
+  admin
+  technician
+  readonly
+}
+
+enum TicketSource {
+  local
+  connectwise
+  imap
+  api
+}
+
+enum NoteType {
+  note
+  time_entry
+}
+
+enum AuditAction {
+  create
+  update
+  delete
+  sync
+}
+
+enum ProviderType {
+  connectwise
+  imap
+  tactical_rmm
+  meshcentral
+  netviz
+}
+
+enum DeviceSource {
+  local
+  netviz
+  tactical_rmm
+  meshcentral
+  api
+}
+
+enum ProbeStatus {
+  online
+  offline
+  error
+}
+
+enum ScriptJobStatus {
+  queued
+  running
+  success
+  error
+  canceled
+}
+
+enum SyncDirection {
+  inbound
+  outbound
+}
+
+enum SyncStatus {
+  success
+  error
+  skipped
+}

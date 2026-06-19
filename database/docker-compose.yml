@@ -1,0 +1,28 @@
+services:
+  mariadb:
+    image: mariadb:latest
+    container_name: mariadb
+    restart: always
+    env_file:
+      - .env                             # Load environment variables from the .env file
+    volumes:
+      - ./data:/var/lib/mysql            # Persistent storage for the database files
+      - ./initdb:/docker-entrypoint-initdb.d:ro # Mount the directory with your SQL scripts
+    ports:
+      - "3306:3306"
+
+  adminer:
+    image: adminer:latest
+    container_name: adminer
+    restart: always
+    depends_on:
+      - mariadb
+    ports:
+      - "2222:8080"                      # Expose Adminer on port 8080
+    environment:
+      ADMINER_DEFAULT_SERVER: mariadb    # Set the default server to the name of the MariaDB container
+
+# Explanation:
+# 1. The `adminer` service is added with `depends_on` set to `mariadb`, ensuring that Adminer waits for MariaDB to start.
+# 2. Adminer is accessible at `http://localhost:8080` in your browser.
+# 3. The `ADMINER_DEFAULT_SERVER` environment variable sets the default server to `mariadb` (the service name of the MariaDB container).

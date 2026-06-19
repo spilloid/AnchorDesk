@@ -1,0 +1,99 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: backend
+  namespace: materialticket
+  labels:
+    app: backend
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: backend
+  template:
+    metadata:
+      labels:
+        app: backend
+    spec:
+      imagePullSecrets:
+        - name: ghcr-pull-secret
+      initContainers:
+        # Wait for MariaDB to accept connections before starting the app.
+        - name: wait-for-db
+          image: busybox:1.36
+          command:
+            - sh
+            - -c
+            - |
+              until nc -z db 3306; do
+                echo "waiting for db..."; sleep 3
+              done
+              echo "db is ready"
+
+        # Apply Prisma schema to the database (idempotent).
+        - name: prisma-db-push
+          image: ghcr.io/spilloid/materialticket-backend:dev
+          imagePullPolicy: Always
+          command: ["npx", "prisma", "db", "push", "--skip-generate"]
+          env:
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: materialticket-secrets
+                  key: DATABASE_URL
+
+      containers:
+        - name: backend
+          image: ghcr.io/spilloid/materialticket-backend:dev
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 8060
+          env:
+            - name: SERVER_PORT
+              value: "8060"
+            - name: NODE_ENV
+              value: development
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: materialticket-secrets
+                  key: DATABASE_URL
+            - name: OIDC_DISABLED
+              value: "true"   # flip to false and set OIDC_* secrets for real auth
+            - name: OIDC_ISSUER_URL
+              valueFrom:
+                secretKeyRef:
+                  name: materialticket-secrets
+                  key: OIDC_ISSUER_URL
+                  optional: true
+            - name: OIDC_CLIENT_ID
+              valueFrom:
+                secretKeyRef:
+                  name: materialticket-secrets
+                  key: OIDC_CLIENT_ID
+                  optional: true
+            - name: OIDC_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: materialticket-secrets
+                  key: OIDC_CLIENT_SECRET
+                  optional: true
+          readinessProbe:
+            httpGet:
+              path: /ping
+              port: 8060
+            initialDelaySeconds: 10
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /ping
+              port: 8060
+            initialDelaySeconds: 30
+            periodSeconds: 15
+            failureThreshold: 3
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              memory: 512Mi

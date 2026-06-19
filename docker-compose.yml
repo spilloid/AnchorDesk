@@ -1,0 +1,47 @@
+services:
+  web-client:
+    build:
+      context: ./web-client
+    # nginx prod image (serves built SPA on :80, proxies /api + /mcp to backend)
+    ports:
+      - "5173:80"
+    depends_on:
+      - backend
+  db:
+    image: mariadb
+    restart: always
+    environment:
+      # Secrets come from the gitignored .env — never hardcode them here.
+      MARIADB_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:?set DB_ROOT_PASSWORD in .env}
+      MARIADB_DATABASE: ${DB_NAME:-materialticket}
+      MARIADB_USER: ${DB_USER:-mtapp}
+      MARIADB_PASSWORD: ${DB_PASSWORD:?set DB_PASSWORD in .env}
+    ports:
+      - 3306:3306
+    volumes:
+      - mariadb:/var/lib/mysql:Z
+  adminer:
+    image: adminer
+    restart: always
+    ports:
+      - 8081:8080
+  backend:
+    build:
+      context: ./backend
+    ports:
+      - 8060:8060
+    depends_on:
+      - db
+    # backend/.env (volume-mounted) supplies OIDC/TRMM/SMTP; DATABASE_URL is
+    # overridden here to reach the db service (not localhost) inside the network.
+    environment:
+      DATABASE_URL: mysql://${DB_USER:-mtapp}:${DB_PASSWORD}@db:3306/${DB_NAME:-materialticket}
+    volumes:
+      - ./backend:/backend # Mount your project's src folder
+      - /backend/node_modules
+volumes:
+  mariadb:
+networks:
+  default:
+      name: "intune-depot-app"
+      external: true

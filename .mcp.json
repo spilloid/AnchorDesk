@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "materialticket": {
+      "type": "sse",
+      "url": "https://tickets.spillerstech.us/mcp/sse"
+    }
+  }
+}

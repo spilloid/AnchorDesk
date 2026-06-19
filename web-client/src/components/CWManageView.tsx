@@ -1,0 +1,305 @@
+import { useState, useEffect, useCallback } from "react";
+import {
+  Box,
+  Button,
+  Chip,
+  CircularProgress,
+  Divider,
+  Paper,
+  Stack,
+  Switch,
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableRow,
+  Typography,
+  Alert,
+} from "@mui/material";
+import SyncIcon from "@mui/icons-material/Sync";
+import CheckCircleIcon from "@mui/icons-material/CheckCircle";
+import ErrorIcon from "@mui/icons-material/Error";
+import * as api from "../api/client";
+
+interface SyncProvider {
+  id: number;
+  name: string;
+  type: string;
+  enabled: boolean;
+  lastSyncedAt: string | null;
+}
+
+interface SyncLogEntry {
+  id: string;
+  externalId: string | null;
+  direction: string;
+  status: string;
+  message: string | null;
+  syncedAt: string;
+  provider: { name: string; type: string };
+}
+
+interface SyncResult {
+  providerName: string;
+  ticketsCreated: number;
+  ticketsUpdated: number;
+  notesUpserted: number;
+  errors: string[];
+  durationMs: number;
+}
+
+interface Props {
+  onTicketsChanged?: () => void;
+}
+
+export default function CWManageView({ onTicketsChanged }: Props) {
+  const [providers, setProviders] = useState<SyncProvider[]>([]);
+  const [syncLog, setSyncLog] = useState<SyncLogEntry[]>([]);
+  const [syncing, setSyncing] = useState<Record<string, boolean>>({});
+  const [lastResults, setLastResults] = useState<SyncResult[]>([]);
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  const loadProviders = useCallback(async () => {
+    try {
+      const data = await api.listSyncProviders();
+      setProviders(data as SyncProvider[]);
+    } catch {
+      setError("Could not load sync providers");
+    }
+  }, []);
+
+  const loadLog = useCallback(async () => {
+    try {
+      const data = await api.getSyncLog({ limit: 50 });
+      setSyncLog(data as SyncLogEntry[]);
+    } catch {
+      // Non-fatal — log might be empty
+    }
+  }, []);
+
+  useEffect(() => {
+    Promise.all([loadProviders(), loadLog()]).finally(() => setLoading(false));
+  }, [loadProviders, loadLog]);
+
+  const handleSync = async (providerName?: string) => {
+    const key = providerName ?? "__all__";
+    setSyncing((s) => ({ ...s, [key]: true }));
+    setError(null);
+
+    try {
+      const result = await api.runSync(providerName);
+      const results = Array.isArray(result) ? result : [result];
+      setLastResults(results as SyncResult[]);
+      await Promise.all([loadProviders(), loadLog()]);
+      onTicketsChanged?.();
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setSyncing((s) => ({ ...s, [key]: false }));
+    }
+  };
+
+  const handleToggleProvider = async (provider: SyncProvider) => {
+    try {
+      await api.toggleSyncProvider(provider.id, !provider.enabled);
+      await loadProviders();
+    } catch (err) {
+      setError((err as Error).message);
+    }
+  };
+
+  const formatDate = (dateStr: string | null) =>
+    dateStr ? new Date(dateStr).toLocaleString() : "Never";
+
+  if (loading) return <CircularProgress sx={{ m: 4 }} />;
+
+  return (
+    <Box sx={{ p: 3, maxWidth: 1000 }}>
+      <Typography variant="h5" gutterBottom fontWeight={600}>
+        Sync Management
+      </Typography>
+      <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
+        Sync tickets from external platforms into materialticket's local database.
+        The local database is always the source of truth.
+      </Typography>
+
+      {error && (
+        <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError(null)}>
+          {error}
+        </Alert>
+      )}
+
+      {/* Last sync results */}
+      {lastResults.length > 0 && (
+        <Box sx={{ mb: 3 }}>
+          {lastResults.map((r, i) => (
+            <Alert
+              key={i}
+              severity={r.errors.length > 0 ? "warning" : "success"}
+              sx={{ mb: 1 }}
+            >
+              <strong>{r.providerName}</strong> — {r.ticketsCreated} created,{" "}
+              {r.ticketsUpdated} updated, {r.notesUpserted} notes · {r.durationMs}ms
+              {r.errors.length > 0 && (
+                <Box sx={{ mt: 0.5, fontSize: 12 }}>
+                  {r.errors.slice(0, 3).map((e, j) => (
+                    <div key={j}>{e}</div>
+                  ))}
+                  {r.errors.length > 3 && <div>…and {r.errors.length - 3} more errors</div>}
+                </Box>
+              )}
+            </Alert>
+          ))}
+        </Box>
+      )}
+
+      {/* Providers */}
+      <Paper variant="outlined" sx={{ mb: 3 }}>
+        <Box sx={{ p: 2, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <Typography variant="subtitle1" fontWeight={600}>
+            Configured Providers
+          </Typography>
+          <Button
+            variant="contained"
+            startIcon={syncing["__all__"] ? <CircularProgress size={16} color="inherit" /> : <SyncIcon />}
+            onClick={() => handleSync()}
+            disabled={Object.values(syncing).some(Boolean) || providers.filter((p) => p.enabled).length === 0}
+          >
+            Sync All
+          </Button>
+        </Box>
+        <Divider />
+
+        {providers.length === 0 ? (
+          <Typography sx={{ p: 2 }} color="text.secondary">
+            No sync providers configured. Insert a row into the <code>sync_providers</code> table to get started.
+          </Typography>
+        ) : (
+          <Table size="small">
+            <TableHead>
+              <TableRow>
+                <TableCell>Provider</TableCell>
+                <TableCell>Type</TableCell>
+                <TableCell>Last Synced</TableCell>
+                <TableCell>Enabled</TableCell>
+                <TableCell align="right">Actions</TableCell>
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {providers.map((p) => (
+                <TableRow key={p.id}>
+                  <TableCell>{p.name}</TableCell>
+                  <TableCell>
+                    <Chip label={p.type} size="small" variant="outlined" />
+                  </TableCell>
+                  <TableCell>
+                    <Typography variant="body2" color="text.secondary">
+                      {formatDate(p.lastSyncedAt)}
+                    </Typography>
+                  </TableCell>
+                  <TableCell>
+                    <Switch
+                      size="small"
+                      checked={p.enabled}
+                      onChange={() => handleToggleProvider(p)}
+                    />
+                  </TableCell>
+                  <TableCell align="right">
+                    <Button
+                      size="small"
+                      variant="outlined"
+                      startIcon={
+                        syncing[p.name] ? (
+                          <CircularProgress size={14} color="inherit" />
+                        ) : (
+                          <SyncIcon />
+                        )
+                      }
+                      onClick={() => handleSync(p.name)}
+                      disabled={!p.enabled || Object.values(syncing).some(Boolean)}
+                    >
+                      Sync Now
+                    </Button>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        )}
+      </Paper>
+
+      {/* Recent sync log */}
+      <Paper variant="outlined">
+        <Box sx={{ p: 2, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <Typography variant="subtitle1" fontWeight={600}>
+            Recent Sync Activity
+          </Typography>
+          <Button size="small" onClick={loadLog}>
+            Refresh
+          </Button>
+        </Box>
+        <Divider />
+
+        {syncLog.length === 0 ? (
+          <Typography sx={{ p: 2 }} color="text.secondary">
+            No sync activity yet.
+          </Typography>
+        ) : (
+          <Table size="small">
+            <TableHead>
+              <TableRow>
+                <TableCell>Time</TableCell>
+                <TableCell>Provider</TableCell>
+                <TableCell>External ID</TableCell>
+                <TableCell>Direction</TableCell>
+                <TableCell>Status</TableCell>
+                <TableCell>Message</TableCell>
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {syncLog.map((entry) => (
+                <TableRow key={entry.id}>
+                  <TableCell>
+                    <Typography variant="body2" color="text.secondary" noWrap>
+                      {new Date(entry.syncedAt).toLocaleTimeString()}
+                    </Typography>
+                  </TableCell>
+                  <TableCell>{entry.provider.name}</TableCell>
+                  <TableCell>
+                    <Typography variant="body2" sx={{ fontFamily: "monospace" }}>
+                      {entry.externalId ?? "—"}
+                    </Typography>
+                  </TableCell>
+                  <TableCell>
+                    <Chip
+                      label={entry.direction}
+                      size="small"
+                      color={entry.direction === "inbound" ? "info" : "default"}
+                      variant="outlined"
+                    />
+                  </TableCell>
+                  <TableCell>
+                    <Stack direction="row" alignItems="center" spacing={0.5}>
+                      {entry.status === "success" ? (
+                        <CheckCircleIcon fontSize="small" color="success" />
+                      ) : entry.status === "error" ? (
+                        <ErrorIcon fontSize="small" color="error" />
+                      ) : null}
+                      <Typography variant="body2">{entry.status}</Typography>
+                    </Stack>
+                  </TableCell>
+                  <TableCell>
+                    <Typography variant="body2" color="text.secondary">
+                      {entry.message ?? ""}
+                    </Typography>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        )}
+      </Paper>
+    </Box>
+  );
+}

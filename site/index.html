@@ -1,0 +1,393 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>materialticket — local-first ticketing for IT teams</title>
+<meta name="description" content="A local-first, self-hosted ticketing platform for MSPs and IT teams that also sees and acts on the machines behind the tickets. React + Fastify + Prisma. MIT licensed." />
+<meta name="theme-color" content="#6750A4" />
+
+<!-- Open Graph -->
+<meta property="og:type" content="website" />
+<meta property="og:title" content="materialticket — local-first ticketing for IT teams" />
+<meta property="og:description" content="Self-hosted ticketing where your database is the source of truth — linked to the devices behind the tickets, with full audit history. MIT licensed." />
+<meta property="og:url" content="https://spilloid.github.io/materialticket/" />
+
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&family=Roboto+Mono:wght@400;500&display=swap" rel="stylesheet" />
+
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Crect width='24' height='24' rx='5' fill='%236750A4'/%3E%3Cpath d='M5 8a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2 2 2 0 0 0 0 4 2 2 0 0 1-2 2H7a2 2 0 0 1-2-2 2 2 0 0 0 0-4z' fill='none' stroke='white' stroke-width='1.4'/%3E%3C/svg%3E" />
+
+<style>
+  :root {
+    --primary: #6750A4;
+    --primary-light: #9A82DB;
+    --on-primary: #ffffff;
+    --primary-container: #EADDFF;
+    --on-primary-container: #21005D;
+    --secondary: #625B71;
+    --bg: #FFFBFE;
+    --surface: #ffffff;
+    --surface-variant: #F4EFF7;
+    --on-surface: #1C1B1F;
+    --on-surface-variant: #49454F;
+    --outline: #CAC4D0;
+    --ink-dark: #1C1A24;
+    --radius: 16px;
+    --shadow-1: 0 1px 2px rgba(0,0,0,.10), 0 1px 3px rgba(0,0,0,.06);
+    --shadow-2: 0 4px 12px rgba(28,27,31,.10), 0 2px 6px rgba(28,27,31,.06);
+    --shadow-3: 0 12px 28px rgba(28,27,31,.14);
+    --maxw: 1140px;
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    margin: 0;
+    font-family: 'Roboto', system-ui, -apple-system, Segoe UI, sans-serif;
+    color: var(--on-surface);
+    background: var(--bg);
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+  }
+  a { color: var(--primary); text-decoration: none; }
+  .wrap { max-width: var(--maxw); margin: 0 auto; padding: 0 24px; }
+  code, .mono { font-family: 'Roboto Mono', ui-monospace, monospace; }
+
+  /* ---- App bar ---- */
+  header.appbar {
+    position: sticky; top: 0; z-index: 50;
+    background: rgba(255,251,254,.85);
+    backdrop-filter: saturate(180%) blur(12px);
+    border-bottom: 1px solid var(--outline);
+  }
+  .appbar .wrap { display: flex; align-items: center; gap: 16px; height: 64px; }
+  .brand { display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 1.15rem; color: var(--on-surface); }
+  .brand svg { width: 30px; height: 30px; display: block; }
+  .nav { margin-left: auto; display: flex; align-items: center; gap: 8px; }
+  .nav a.link { padding: 8px 12px; border-radius: 8px; color: var(--on-surface-variant); font-weight: 500; font-size: .95rem; }
+  .nav a.link:hover { background: var(--surface-variant); color: var(--on-surface); }
+  @media (max-width: 720px){ .nav a.link { display: none; } }
+
+  .btn {
+    display: inline-flex; align-items: center; gap: 8px;
+    padding: 10px 22px; border-radius: 100px; font-weight: 500; font-size: .95rem;
+    border: 1px solid transparent; cursor: pointer; transition: box-shadow .2s, background .2s, transform .05s;
+  }
+  .btn:active { transform: translateY(1px); }
+  .btn-filled { background: var(--primary); color: var(--on-primary); box-shadow: var(--shadow-1); }
+  .btn-filled:hover { box-shadow: var(--shadow-2); background: #5a4593; }
+  .btn-tonal { background: var(--primary-container); color: var(--on-primary-container); }
+  .btn-tonal:hover { box-shadow: var(--shadow-1); }
+  .btn-outline { background: transparent; color: var(--primary); border-color: var(--outline); }
+  .btn-outline:hover { background: var(--surface-variant); }
+
+  /* ---- Hero ---- */
+  .hero {
+    position: relative; overflow: hidden;
+    background: radial-gradient(1200px 500px at 80% -10%, #2a2342 0%, transparent 60%),
+                linear-gradient(160deg, #1C1A24 0%, #2D2545 55%, #3a2f5e 100%);
+    color: #fff;
+  }
+  .hero .wrap { padding: 92px 24px 96px; }
+  .hero-grid { display: grid; grid-template-columns: 1.05fr .95fr; gap: 56px; align-items: center; }
+  @media (max-width: 920px){ .hero-grid { grid-template-columns: 1fr; gap: 40px; } }
+  .pill {
+    display: inline-flex; align-items: center; gap: 8px; font-size: .82rem; font-weight: 500;
+    padding: 6px 14px; border-radius: 100px; background: rgba(234,221,255,.12);
+    color: #EADDFF; border: 1px solid rgba(234,221,255,.25); margin-bottom: 22px;
+  }
+  .hero h1 { font-size: clamp(2.3rem, 5vw, 3.5rem); line-height: 1.08; margin: 0 0 20px; font-weight: 700; letter-spacing: -.5px; }
+  .hero h1 .accent { background: linear-gradient(90deg,#D0BCFF,#9A82DB); -webkit-background-clip: text; background-clip: text; color: transparent; }
+  .hero p.lead { font-size: 1.18rem; color: #D6D1E0; margin: 0 0 32px; max-width: 36ch; }
+  .hero .cta { display: flex; gap: 14px; flex-wrap: wrap; }
+  .hero .meta { margin-top: 28px; display: flex; gap: 22px; flex-wrap: wrap; color: #B9B3C7; font-size: .9rem; }
+  .hero .meta b { color: #fff; }
+
+  /* ticket mock card */
+  .mock {
+    background: var(--surface); color: var(--on-surface); border-radius: 20px;
+    box-shadow: var(--shadow-3); overflow: hidden; transform: rotate(-1.2deg);
+  }
+  .mock:hover { transform: rotate(0); transition: transform .4s; }
+  .mock-top { background: var(--primary); color: #fff; padding: 14px 18px; display: flex; align-items: center; gap: 10px; font-weight: 500; }
+  .mock-top .dot { width: 10px; height: 10px; border-radius: 50%; background: #7CFFB2; box-shadow: 0 0 0 3px rgba(124,255,178,.25); }
+  .mock-body { padding: 18px; }
+  .mrow { display: flex; align-items: center; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid var(--surface-variant); font-size: .92rem; }
+  .mrow:last-child { border-bottom: 0; }
+  .mrow .k { color: var(--on-surface-variant); }
+  .chip { font-size: .76rem; font-weight: 500; padding: 3px 10px; border-radius: 100px; background: var(--primary-container); color: var(--on-primary-container); }
+  .chip.green { background: #C6F6D5; color: #14532D; }
+  .chip.amber { background: #FDE9C8; color: #7A4F01; }
+  .device-line { display: flex; align-items: center; gap: 8px; margin-top: 14px; padding: 12px; border-radius: 12px; background: var(--surface-variant); font-size: .86rem; }
+  .device-line .dstat { width: 8px; height: 8px; border-radius: 50%; background: #2BB673; }
+
+  /* ---- Sections ---- */
+  section { padding: 86px 0; }
+  .section-head { text-align: center; max-width: 680px; margin: 0 auto 56px; }
+  .section-head .eyebrow { color: var(--primary); font-weight: 700; letter-spacing: .12em; text-transform: uppercase; font-size: .78rem; }
+  .section-head h2 { font-size: clamp(1.8rem, 3.5vw, 2.5rem); margin: 12px 0 14px; letter-spacing: -.4px; }
+  .section-head p { color: var(--on-surface-variant); font-size: 1.08rem; margin: 0; }
+
+  .features { display: grid; grid-template-columns: repeat(3, 1fr); gap: 22px; }
+  @media (max-width: 920px){ .features { grid-template-columns: repeat(2,1fr); } }
+  @media (max-width: 620px){ .features { grid-template-columns: 1fr; } }
+  .card {
+    background: var(--surface); border: 1px solid var(--outline); border-radius: var(--radius);
+    padding: 26px; transition: box-shadow .2s, transform .2s, border-color .2s;
+  }
+  .card:hover { box-shadow: var(--shadow-2); transform: translateY(-3px); border-color: transparent; }
+  .card .ico {
+    width: 46px; height: 46px; border-radius: 12px; display: grid; place-items: center;
+    background: var(--primary-container); color: var(--on-primary-container); margin-bottom: 16px;
+  }
+  .card .ico svg { width: 24px; height: 24px; }
+  .card h3 { margin: 0 0 8px; font-size: 1.12rem; }
+  .card p { margin: 0; color: var(--on-surface-variant); font-size: .95rem; }
+
+  /* how it works */
+  .alt { background: var(--surface-variant); }
+  .how { display: grid; grid-template-columns: 1fr 1fr; gap: 48px; align-items: center; }
+  @media (max-width: 920px){ .how { grid-template-columns: 1fr; } }
+  .steps { list-style: none; margin: 0; padding: 0; }
+  .steps li { display: flex; gap: 18px; padding: 16px 0; border-bottom: 1px solid var(--outline); }
+  .steps li:last-child { border-bottom: 0; }
+  .steps .num { flex: none; width: 36px; height: 36px; border-radius: 50%; background: var(--primary); color: #fff; display: grid; place-items: center; font-weight: 700; }
+  .steps h4 { margin: 4px 0 4px; font-size: 1.05rem; }
+  .steps p { margin: 0; color: var(--on-surface-variant); font-size: .94rem; }
+
+  .codecard { background: var(--ink-dark); border-radius: var(--radius); box-shadow: var(--shadow-3); overflow: hidden; }
+  .codecard .bar { display: flex; gap: 7px; padding: 14px 16px; background: #15131c; }
+  .codecard .bar span { width: 12px; height: 12px; border-radius: 50%; background: #4a4658; }
+  .codecard .bar span:nth-child(1){ background:#ff5f57;} .codecard .bar span:nth-child(2){ background:#febc2e;} .codecard .bar span:nth-child(3){ background:#28c840;}
+  .codecard pre { margin: 0; padding: 22px; overflow-x: auto; font-family: 'Roboto Mono', monospace; font-size: .86rem; line-height: 1.75; color: #E6E1F0; }
+  .codecard .c { color: #8a83a3; } .codecard .p { color: #9A82DB; } .codecard .s { color: #7Cdfa0; }
+
+  /* integrations */
+  .integrations { display: grid; grid-template-columns: repeat(4,1fr); gap: 16px; }
+  @media (max-width: 920px){ .integrations { grid-template-columns: repeat(2,1fr); } }
+  .int {
+    background: var(--surface); border: 1px solid var(--outline); border-radius: var(--radius);
+    padding: 22px; text-align: center;
+  }
+  .int .badge { font-size: .68rem; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; color: var(--primary); }
+  .int .badge.soon { color: var(--secondary); }
+  .int h4 { margin: 10px 0 4px; font-size: 1.02rem; }
+  .int p { margin: 0; font-size: .86rem; color: var(--on-surface-variant); }
+
+  /* CTA band */
+  .ctaband { background: linear-gradient(135deg, var(--primary) 0%, #4a3a7d 100%); color: #fff; border-radius: 28px; padding: 56px 40px; text-align: center; box-shadow: var(--shadow-3); }
+  .ctaband h2 { font-size: clamp(1.8rem,3.5vw,2.4rem); margin: 0 0 12px; }
+  .ctaband p { margin: 0 0 28px; color: #EADDFF; font-size: 1.1rem; }
+  .ctaband .btn-filled { background: #fff; color: var(--primary); }
+  .ctaband .btn-filled:hover { background: #f1ecfb; }
+  .ctaband .btn-outline { color: #fff; border-color: rgba(255,255,255,.5); }
+  .ctaband .btn-outline:hover { background: rgba(255,255,255,.12); }
+
+  footer { padding: 48px 0; border-top: 1px solid var(--outline); color: var(--on-surface-variant); }
+  footer .wrap { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+  footer .brand { font-size: 1rem; }
+  footer .fnav { margin-left: auto; display: flex; gap: 20px; flex-wrap: wrap; }
+  footer .fnav a { color: var(--on-surface-variant); font-size: .9rem; }
+  footer .fnav a:hover { color: var(--primary); }
+
+  .reveal { opacity: 0; transform: translateY(18px); transition: opacity .6s ease, transform .6s ease; }
+  .reveal.in { opacity: 1; transform: none; }
+  @media (prefers-reduced-motion: reduce){ .reveal { opacity: 1; transform: none; } html { scroll-behavior: auto; } }
+</style>
+</head>
+<body>
+
+<!-- logo mark reused inline -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="logo" viewBox="0 0 24 24">
+    <rect width="24" height="24" rx="5" fill="#6750A4"/>
+    <path d="M5 8a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2 2 2 0 0 0 0 4 2 2 0 0 1-2 2H7a2 2 0 0 1-2-2 2 2 0 0 0 0-4z" fill="none" stroke="#fff" stroke-width="1.4"/>
+    <path d="M12 7v8" stroke="#fff" stroke-width="1.2" stroke-dasharray="1.5 1.5"/>
+  </symbol>
+</svg>
+
+<header class="appbar">
+  <div class="wrap">
+    <a class="brand" href="#top"><svg><use href="#logo"/></svg> materialticket</a>
+    <nav class="nav">
+      <a class="link" href="#features">Features</a>
+      <a class="link" href="#how">How it works</a>
+      <a class="link" href="#integrations">Integrations</a>
+      <a class="link" href="#start">Get started</a>
+      <a class="btn btn-tonal" href="https://github.com/spilloid/materialticket" target="_blank" rel="noopener">GitHub ↗</a>
+    </nav>
+  </div>
+</header>
+
+<main id="top">
+  <!-- HERO -->
+  <section class="hero" style="padding:0">
+    <div class="wrap">
+      <div class="hero-grid">
+        <div>
+          <span class="pill">● v1.0.0 — first public release · MIT licensed</span>
+          <h1>Ticketing that knows<br><span class="accent">the machines</span> behind the ticket.</h1>
+          <p class="lead">A self-hosted helpdesk where <b>your database is the source of truth</b> — linked to discovered devices, wired to your RMM, and fully audited.</p>
+          <div class="cta">
+            <a class="btn btn-filled" href="#start">Get started</a>
+            <a class="btn btn-outline" href="https://github.com/spilloid/materialticket" target="_blank" rel="noopener" style="color:#fff;border-color:rgba(255,255,255,.5)">View on GitHub</a>
+          </div>
+          <div class="meta">
+            <span><b>Local-first</b> · MariaDB</span>
+            <span><b>React + MUI</b> · Fastify</span>
+            <span><b>OIDC</b> auth</span>
+            <span><b>MCP</b> ready</span>
+          </div>
+        </div>
+        <div>
+          <div class="mock" role="img" aria-label="Example ticket card linked to a device">
+            <div class="mock-top"><span class="dot"></span> Ticket #1042 · ACME Corp</div>
+            <div class="mock-body">
+              <div class="mrow"><span class="k">Title</span><span>VPN drops on ACME-PC-01</span></div>
+              <div class="mrow"><span class="k">Status</span><span class="chip amber">In Progress</span></div>
+              <div class="mrow"><span class="k">Priority</span><span class="chip">High</span></div>
+              <div class="mrow"><span class="k">Assignee</span><span>j.spillers</span></div>
+              <div class="device-line">
+                <span class="dstat"></span>
+                <span class="mono">ACME-PC-01 · 192.168.1.20 · Windows 11</span>
+                <span class="chip green" style="margin-left:auto">online</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- FEATURES -->
+  <section id="features">
+    <div class="wrap">
+      <div class="section-head reveal">
+        <div class="eyebrow">Why materialticket</div>
+        <h2>A helpdesk and an operations console, in one place.</h2>
+        <p>Run it standalone or plug in your stack. Every feature works whether or not an external system is connected.</p>
+      </div>
+      <div class="features">
+        <div class="card reveal">
+          <div class="ico"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M4 4h16a2 2 0 0 1 2 2v3a2 2 0 0 0 0 6v3a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2v-3a2 2 0 0 0 0-6V6a2 2 0 0 1 2-2z"/></svg></div>
+          <h3>Local-first ticketing</h3>
+          <p>Full CRUD, statuses, priorities, assignees, time entries, and a Kanban board — no external dependency required.</p>
+        </div>
+        <div class="card reveal">
+          <div class="ico"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M13 3a9 9 0 1 0 8 5h-2.1A7 7 0 1 1 13 5.1V3z"/><path d="M12 8v5l4 2"/></svg></div>
+          <h3>Full audit trail</h3>
+          <p>Every change writes a before/after snapshot to an append-only log. Per-ticket revision history and attribution, built in.</p>
+        </div>
+        <div class="card reveal">
+          <div class="ico"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 5h18v11H3z"/><path d="M8 20h8M12 16v4" stroke="currentColor" stroke-width="1.5"/></svg></div>
+          <h3>Device inventory</h3>
+          <p>LAN probes push discovered devices into your database. Link them to tickets so a card shows the machine — and whether it's up.</p>
+        </div>
+        <div class="card reveal">
+          <div class="ico"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M13 2 4.5 13H11l-1 9 9-12h-6.5z"/></svg></div>
+          <h3>Act on machines</h3>
+          <p>Queue and schedule scripts against a device through your RMM — Tactical RMM today — directly from the ticket.</p>
+        </div>
+        <div class="card reveal">
+          <div class="ico"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2 4 6v6c0 5 3.4 8.5 8 10 4.6-1.5 8-5 8-10V6z"/></svg></div>
+          <h3>OIDC authentication</h3>
+          <p>Auth is delegated to any OIDC provider — Azure AD, Authentik, and more. No passwords ever stored locally.</p>
+        </div>
+        <div class="card reveal">
+          <div class="ico"><svg viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="12" r="3"/><path d="M5 12a7 7 0 0 1 7-7M19 12a7 7 0 0 1-7 7" stroke="currentColor" stroke-width="1.6" fill="none"/></svg></div>
+          <h3>Pluggable sync &amp; MCP</h3>
+          <p>Strategy/Repository boundaries make ConnectWise, IMAP-to-ticket, and RMM runners drop-in. A built-in MCP server lets AI agents manage tickets.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- HOW IT WORKS -->
+  <section id="how" class="alt">
+    <div class="wrap">
+      <div class="section-head reveal">
+        <div class="eyebrow">How it works</div>
+        <h2>Your database is the core. Everything else is an adapter.</h2>
+      </div>
+      <div class="how">
+        <ol class="steps reveal">
+          <li><span class="num">1</span><div><h4>Tickets land locally</h4><p>Created in the UI, emailed in, or synced from ConnectWise — every ticket is written to your MariaDB first.</p></div></li>
+          <li><span class="num">2</span><div><h4>Probes report devices</h4><p>A scanner on the customer LAN heartbeats and pushes device records, upserted into your <span class="mono">devices</span> table.</p></div></li>
+          <li><span class="num">3</span><div><h4>Link &amp; act</h4><p>Attach devices to a ticket and run RMM scripts against them — run-now or scheduled — without leaving the ticket.</p></div></li>
+          <li><span class="num">4</span><div><h4>Everything is audited</h4><p>Each mutation appends a before/after snapshot, giving you complete, attributable history.</p></div></li>
+        </ol>
+        <div class="codecard reveal">
+          <div class="bar"><span></span><span></span><span></span></div>
+<pre><span class="c"># 1 · start the database + DB browser</span>
+docker compose up -d db adminer
+
+<span class="c"># 2 · configure &amp; push the schema</span>
+cp backend/.env.example backend/.env
+cd backend &amp;&amp; npx <span class="p">prisma</span> db push
+
+<span class="c"># 3 · run backend + frontend</span>
+npm <span class="s">start</span>          <span class="c"># :8060</span>
+cd ../web-client &amp;&amp; npm run <span class="s">dev</span>   <span class="c"># :5173</span>
+
+<span class="c"># → open http://localhost:5173</span></pre>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- INTEGRATIONS -->
+  <section id="integrations">
+    <div class="wrap">
+      <div class="section-head reveal">
+        <div class="eyebrow">Integrations</div>
+        <h2>Connect the tools you already run.</h2>
+        <p>Each integration implements a Strategy interface and routes all data access through a repository — adding one is a new class, not a rewrite.</p>
+      </div>
+      <div class="integrations">
+        <div class="int reveal"><div class="badge">Available</div><h4>ConnectWise Manage</h4><p>Two-way ticket sync against your CW board.</p></div>
+        <div class="int reveal"><div class="badge">Available</div><h4>netviz probe</h4><p>LAN device discovery → device ingest.</p></div>
+        <div class="int reveal"><div class="badge">Available</div><h4>Tactical RMM</h4><p>Device sync and remote script execution.</p></div>
+        <div class="int reveal"><div class="badge soon">Planned</div><h4>IMAP &amp; SMTP</h4><p>Email-to-ticket and outbound notifications.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- CTA -->
+  <section id="start">
+    <div class="wrap">
+      <div class="ctaband reveal">
+        <h2>Self-host materialticket in minutes.</h2>
+        <p>Free and open source under the MIT license. Docker, Kubernetes, and prebuilt GHCR images included.</p>
+        <div class="cta" style="display:flex;gap:14px;justify-content:center;flex-wrap:wrap">
+          <a class="btn btn-filled" href="https://github.com/spilloid/materialticket" target="_blank" rel="noopener">Clone the repo ↗</a>
+          <a class="btn btn-outline" href="https://github.com/spilloid/materialticket#quickstart" target="_blank" rel="noopener">Read the quickstart</a>
+        </div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <a class="brand" href="#top"><svg style="width:24px;height:24px"><use href="#logo"/></svg> materialticket</a>
+    <span style="font-size:.88rem">MIT © Joseph Spillers</span>
+    <nav class="fnav">
+      <a href="https://github.com/spilloid/materialticket" target="_blank" rel="noopener">GitHub</a>
+      <a href="https://github.com/spilloid/materialticket/blob/main/docs/architecture.md" target="_blank" rel="noopener">Architecture</a>
+      <a href="https://github.com/spilloid/materialticket/blob/main/LICENSE" target="_blank" rel="noopener">License</a>
+    </nav>
+  </div>
+</footer>
+
+<script>
+  const io = new IntersectionObserver((entries) => {
+    entries.forEach(e => { if (e.isIntersecting) { e.target.classList.add('in'); io.unobserve(e.target); } });
+  }, { threshold: .12 });
+  document.querySelectorAll('.reveal').forEach((el, i) => {
+    el.style.transitionDelay = (i % 3 * 70) + 'ms';
+    io.observe(el);
+  });
+</script>
+</body>
+</html>
