@@ -1,8 +1,7 @@
 <div align="center">
 
 # AnchorDesk
-
-<img width="1448" height="1086" alt="AnchorDesk ticket dashboard" src="https://github.com/user-attachments/assets/da07a6e2-6b5b-4eaf-8620-e1243ab60f4c" />
+<img width="1448" height="1086" alt="image" src="https://github.com/user-attachments/assets/3aecc3fd-67d6-43b8-b186-374ad0c0d3a2" />
 
 **A local-first ticketing platform for MSPs and IT teams — that also sees and acts on the machines behind the tickets.**
 
