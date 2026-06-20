@@ -117,6 +117,46 @@ model Mailbox {
   @@map("mailboxes")
 }
 
+// A customer/organization. Tickets and devices carry a denormalized companyName
+// string (for sync + back-compat) AND an optional companyId once linked here.
+model Company {
+  id        Int      @id @default(autoincrement())
+  name      String   @unique @db.VarChar(200)
+  domain    String?  @db.VarChar(150)
+  phone     String?  @db.VarChar(50)
+  email     String?  @db.VarChar(255)
+  website   String?  @db.VarChar(255)
+  address   String?  @db.VarChar(500)
+  notes     String?  @db.Text
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  contacts Contact[]
+  tickets  Ticket[]
+  devices  Device[]
+
+  @@map("companies")
+}
+
+// A person at a company (the "who" on a ticket).
+model Contact {
+  id        Int      @id @default(autoincrement())
+  companyId Int      @map("company_id")
+  name      String   @db.VarChar(200)
+  email     String?  @db.VarChar(255)
+  phone     String?  @db.VarChar(50)
+  title     String?  @db.VarChar(150)
+  isPrimary Boolean  @default(false) @map("is_primary")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  company Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  tickets Ticket[]
+
+  @@index([companyId])
+  @@map("contacts")
+}
+
 model Ticket {
   id               Int          @id @default(autoincrement())
   ticketNumber     String?      @map("ticket_number") @db.VarChar(50)
@@ -125,7 +165,11 @@ model Ticket {
   description      String?      @db.Text
   status           String       @default("New") @db.VarChar(100)
   priority         String?      @db.VarChar(50)
+  // companyName is kept denormalized (sync/back-compat); companyId links the
+  // ticket to the Company record once associated.
   companyName      String?      @map("company_name") @db.VarChar(150)
+  companyId        Int?         @map("company_id")
+  contactId        Int?         @map("contact_id")
   assignee         String?      @db.VarChar(100)
   assigneeId       Int?         @map("assignee_id")
   source           TicketSource @default(local)
@@ -136,12 +180,15 @@ model Ticket {
   updatedAt        DateTime     @updatedAt @map("updated_at")
 
   assigneeUser User?        @relation("AssignedTickets", fields: [assigneeId], references: [id])
+  company      Company?     @relation(fields: [companyId], references: [id], onDelete: SetNull)
+  contact      Contact?     @relation(fields: [contactId], references: [id], onDelete: SetNull)
   notes        Note[]
   syncEntries  SyncLog[]
   deviceLinks  DeviceLink[]
   scriptJobs   ScriptJob[]
 
   @@unique([externalId, externalProvider])
+  @@index([companyId])
   @@map("tickets")
 }
 
@@ -154,6 +201,9 @@ model Note {
   noteType   NoteType  @default(note) @map("note_type")
   timeStart  DateTime? @map("time_start")
   timeStop   DateTime? @map("time_stop")
+  // Canonical billable duration for time_entry notes (minutes). Lets users log
+  // "30m" directly without start/stop; totals sum this field.
+  minutes    Int?
   externalId String?   @map("external_id") @db.VarChar(100)
   createdAt  DateTime  @default(now()) @map("created_at")
   updatedAt  DateTime  @updatedAt @map("updated_at")
@@ -227,6 +277,7 @@ model Device {
   openPorts        Json?        @map("open_ports")
   status           String       @default("unknown") @db.VarChar(50)
   companyName      String?      @map("company_name") @db.VarChar(150)
+  companyId        Int?         @map("company_id")
   source           DeviceSource @default(local)
   probeId          Int?         @map("probe_id")
   externalId       String?      @map("external_id") @db.VarChar(100)
@@ -238,6 +289,7 @@ model Device {
   updatedAt        DateTime     @updatedAt @map("updated_at")
 
   probe       Probe?       @relation(fields: [probeId], references: [id])
+  company     Company?     @relation(fields: [companyId], references: [id], onDelete: SetNull)
   ticketLinks DeviceLink[]
   scriptJobs  ScriptJob[]
 

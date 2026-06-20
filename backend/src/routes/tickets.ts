@@ -104,4 +104,28 @@ export async function ticketRoutes(server: FastifyInstance) {
     if (!note) return reply.status(404).send({ error: 'Note not found' });
     return reply.status(204).send();
   });
+
+  // ─── Time tracking ───────────────────────────────────────────────────────────
+  // Total logged minutes for a ticket.
+  server.get('/tickets/:id/time', async (req: FastifyRequest<{ Params: IdParam }>, reply: FastifyReply) => {
+    const minutes = await noteRepo.timeTotalForTicket(parseInt(req.params.id));
+    return reply.send({ minutes });
+  });
+
+  // Log time: a time_entry note carrying a duration (minutes) + optional note.
+  // Easy by design — just a duration; start/stop is optional metadata.
+  server.post('/tickets/:id/time', async (req: FastifyRequest<{ Params: IdParam }>, reply: FastifyReply) => {
+    const body = (req.body ?? {}) as { minutes?: number; note?: string };
+    const minutes = Math.round(Number(body.minutes));
+    if (!minutes || minutes <= 0) return reply.status(400).send({ error: 'minutes must be a positive number' });
+
+    const author = req.user?.displayName ?? req.actorSub;
+    const content = body.note?.trim() || `Logged ${minutes} min`;
+    const note = await noteRepo.create(
+      parseInt(req.params.id),
+      { content, author, authorId: req.user?.id || undefined, noteType: 'time_entry', minutes },
+      req.actorSub
+    );
+    return reply.status(201).send(note);
+  });
 }

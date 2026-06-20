@@ -15,6 +15,7 @@ import { authRoutes } from './routes/auth';
 import { userRoutes } from './routes/users';
 import { integrationRoutes } from './routes/integrations';
 import { adminRoutes } from './routes/admin';
+import { companyRoutes } from './routes/companies';
 import { registerAuthHook } from './middleware/auth';
 import { bootstrapAuth } from './services/auth/bootstrap';
 import { pruneExpiredSessions } from './services/auth/sessions';
@@ -66,6 +67,9 @@ async function start() {
   server.register(integrationRoutes);
   // Admin: console overview + audit-log viewer.
   server.register(adminRoutes);
+
+  // CRM: companies + contacts + company rollups
+  server.register(companyRoutes);
 
   // Core local-DB routes (tickets, notes, history)
   server.register(ticketRoutes);

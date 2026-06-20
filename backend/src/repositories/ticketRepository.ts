@@ -18,6 +18,8 @@ export interface CreateTicketInput {
   status?: string;
   priority?: string;
   companyName?: string;
+  companyId?: number | null;
+  contactId?: number | null;
   assignee?: string;
   assigneeId?: number;
   source?: TicketSource;
@@ -33,9 +35,18 @@ export interface UpdateTicketInput {
   status?: string;
   priority?: string;
   companyName?: string;
+  companyId?: number | null;
+  contactId?: number | null;
   assignee?: string;
   assigneeId?: number | null;
   closedAt?: Date | null;
+}
+
+/** Resolve a Company's name so we can keep ticket.companyName denormalized. */
+async function companyNameFor(companyId?: number | null): Promise<string | undefined> {
+  if (!companyId) return undefined;
+  const c = await prisma.company.findUnique({ where: { id: companyId }, select: { name: true } });
+  return c?.name ?? undefined;
 }
 
 export async function list(opts: TicketListOptions = {}) {
@@ -59,7 +70,16 @@ export async function list(opts: TicketListOptions = {}) {
 export async function getById(id: number) {
   return prisma.ticket.findUnique({
     where: { id },
-    include: { assigneeUser: true, notes: { orderBy: { createdAt: 'desc' } } },
+    include: { assigneeUser: true, company: true, contact: true, notes: { orderBy: { createdAt: 'desc' } } },
+  });
+}
+
+/** Tickets for a company (by FK), most recent first. */
+export function listForCompany(companyId: number) {
+  return prisma.ticket.findMany({
+    where: { companyId, status: { not: 'Deleted' } },
+    orderBy: { createdAt: 'desc' },
+    include: { assigneeUser: true, contact: true },
   });
 }
 
@@ -96,6 +116,8 @@ export async function search(q: string, limit = 50) {
 }
 
 export async function create(input: CreateTicketInput, actorSub: string) {
+  // If linked to a Company, keep companyName in sync with the Company record.
+  const companyName = input.companyId ? await companyNameFor(input.companyId) : input.companyName;
   const ticket = await prisma.ticket.create({
     data: {
       title: input.title,
@@ -103,7 +125,9 @@ export async function create(input: CreateTicketInput, actorSub: string) {
       description: input.description,
       status: input.status ?? 'New',
       priority: input.priority,
-      companyName: input.companyName,
+      companyName,
+      companyId: input.companyId ?? undefined,
+      contactId: input.contactId ?? undefined,
       assignee: input.assignee,
       assigneeId: input.assigneeId,
       source: input.source ?? 'local',
@@ -128,10 +152,13 @@ export async function update(id: number, input: UpdateTicketInput, actorSub: str
   const before = await prisma.ticket.findUnique({ where: { id } });
   if (!before) return null;
 
-  const ticket = await prisma.ticket.update({
-    where: { id },
-    data: { ...input },
-  });
+  const data: Prisma.TicketUncheckedUpdateInput = { ...input };
+  // Re-denormalize companyName when the company link changes.
+  if (input.companyId !== undefined) {
+    data.companyName = input.companyId ? await companyNameFor(input.companyId) : null;
+  }
+
+  const ticket = await prisma.ticket.update({ where: { id }, data });
 
   await audit.record({
     entityType: 'ticket',

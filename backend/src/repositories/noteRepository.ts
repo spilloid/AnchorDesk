@@ -9,6 +9,7 @@ export interface CreateNoteInput {
   noteType?: NoteType;
   timeStart?: Date;
   timeStop?: Date;
+  minutes?: number;
   externalId?: string;
 }
 
@@ -16,6 +17,13 @@ export interface UpdateNoteInput {
   content?: string;
   timeStart?: Date | null;
   timeStop?: Date | null;
+  minutes?: number | null;
+}
+
+/** Sum of logged minutes (time_entry notes) on a ticket. */
+export async function timeTotalForTicket(ticketId: number): Promise<number> {
+  const r = await prisma.note.aggregate({ where: { ticketId, noteType: 'time_entry' }, _sum: { minutes: true } });
+  return r._sum.minutes ?? 0;
 }
 
 export async function listForTicket(ticketId: number) {
@@ -36,6 +44,7 @@ export async function create(ticketId: number, input: CreateNoteInput, actorSub:
       noteType: input.noteType ?? 'note',
       timeStart: input.timeStart,
       timeStop: input.timeStop,
+      minutes: input.minutes,
       externalId: input.externalId,
     },
   });
