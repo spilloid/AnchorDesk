@@ -39,10 +39,17 @@ async function start() {
   // in-memory store; swap to a shared store (e.g. Redis) if you scale to replicas.
   await server.register(rateLimit, { global: false });
 
-  // Parse JSON request bodies
+  // Parse JSON request bodies. Body-less POSTs (e.g. /devices/sync, logout) often
+  // still send `Content-Type: application/json` with an empty body — treat that as
+  // no body instead of JSON.parse('') throwing "Unexpected end of JSON input".
   server.addContentTypeParser('application/json', { parseAs: 'string' }, function (_req, body, done) {
+    const str = (body as string).trim();
+    if (str === '') {
+      done(null, undefined);
+      return;
+    }
     try {
-      done(null, JSON.parse(body as string));
+      done(null, JSON.parse(str));
     } catch (err) {
       done(err as Error, undefined);
     }

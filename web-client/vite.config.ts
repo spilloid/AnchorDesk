@@ -11,7 +11,10 @@ export default defineConfig({
         target: 'http://backend:8060/',
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/api/, ''),
-      }
+      },
+      // Probe self-service + MCP keep their paths (backend serves them at root).
+      '/probe': { target: 'http://backend:8060/', changeOrigin: true },
+      '/mcp': { target: 'http://backend:8060/', changeOrigin: true },
     }
   },
   plugins: [react()],
