@@ -23,19 +23,21 @@
 
 What sets it apart from a plain helpdesk: each ticket can become an operations cockpit. Link the **devices** involved, inspect their source and status, run Tactical RMM scripts, send email, and keep the resulting activity on the ticket. Core changes are recorded in an **append-only audit log** with actor and before/after data.
 
-## What ships in v1.2.0
+## What ships in v1.6.0
 
-- **🎫 Local-first ticketing** — create and edit tickets, assign technicians, manage notes, filter views, use card/table/Kanban layouts, and search ticket text through the API.
-- **🧰 Ticket cockpit** — a two-column ticket view with status, priority, source, assignee picker, activity timeline, linked devices, script jobs, and outbound email when configured.
-- **📥 Email-to-ticket** — poll one or more IMAP mailboxes, create tickets from new messages, and thread replies into existing tickets by `In-Reply-To` and `References`.
-- **📤 Ticket email** — send through SMTP from inside a ticket; sent messages are recorded as notes on the activity timeline.
+- **🎫 Local-first ticketing** — create and edit tickets, assign technicians, manage notes, filter views, and use card/table/Kanban layouts. The list is server-paginated with server-side search and filtering, so it scales past large ticket counts.
+- **🧰 Ticket cockpit** — one ticket view with status, priority, source, company & contact, assignee picker, activity timeline, time tracking, linked devices, script jobs, and email.
+- **🏢 Companies & contacts (CRM)** — first-class company and contact records, company pages, company-scoped tickets and devices, and inline contact creation from a ticket.
+- **⏱️ Time tracking** — log billable time as a quick duration or a start/stop window; entries total per ticket and are editable on the timeline.
+- **📥 Email-to-ticket** — poll one or more IMAP mailboxes, create tickets from new messages, and thread replies into existing tickets by `In-Reply-To` and `References`, preserving sanitized inbound HTML.
+- **📤 Ticket email** — compose sanitized **HTML** replies from inside a ticket with a rich-text editor; outbound mail sets threading headers so customer replies land back on the same ticket, rendered as an inbound/outbound conversation on the timeline.
 - **🧭 Admin console** — live ticket/device/probe/user/mailbox counts, recent activity, user and auth management, integration settings, mailbox management, inventory, and an audit-log viewer.
 - **🔐 Auth + RBAC** — local accounts, OIDC, and SAML 2.0 can run side by side. TOTP MFA is required by default for local accounts, with `admin`, `technician`, and `readonly` roles.
 - **🖥️ Device inventory + network map** — ingest devices from [netviz](#probes--devices), sync them from Tactical RMM, or add them manually; group the radial map by probe or company and link devices to tickets.
 - **⚡ Tactical RMM actions** — sync devices, browse the Tactical script catalog, run scripts now or schedule them, and retain job status/output.
 - **🔄 ConnectWise ingestion** — incrementally import ConnectWise Manage tickets and notes into the local database with provider status and sync logs. This is inbound sync, not two-way writeback.
 - **📝 Audit history** — ticket, note, device, user, mailbox, and other managed-record changes append actor-attributed history; admins can browse recent events across entities.
-- **🤖 MCP server** — built-in [Model Context Protocol](https://modelcontextprotocol.io) tools let authenticated agents list, read, create, and update tickets, add notes, and inspect ticket history.
+- **🤖 MCP server** — built-in [Model Context Protocol](https://modelcontextprotocol.io) tools let authenticated agents list, read, create, and update tickets, add notes, log time, send ticket email, and inspect ticket history.
 - **📦 Self-hosting included** — Docker Compose, Kubernetes manifests, and tagged backend/web images on GHCR.
 
 ## Architecture
@@ -107,8 +109,8 @@ Open **http://localhost:5173** — `/api/*`, `/probe/*`, and `/mcp/*` are proxie
 
 For the complete Compose stack, run `docker compose up --build`. Tagged release images are published as:
 
-- `ghcr.io/spilloid/anchordesk-backend:1.2.0`
-- `ghcr.io/spilloid/anchordesk-web-client:1.2.0`
+- `ghcr.io/spilloid/anchordesk-backend:1.6.0`
+- `ghcr.io/spilloid/anchordesk-web-client:1.6.0`
 
 ## Configuration
 
@@ -139,9 +141,9 @@ Local tickets are the source of truth. Integrations ingest into or act on those 
 |---|---|
 | **Auth** | `POST /auth/login`, `/auth/mfa/*`, `/auth/oidc/*`, `/auth/saml/*`, `GET /auth/me`, `POST /auth/logout` |
 | **Admin** | `/admin/overview`, `/admin/audit`, user CRUD, auth settings, integration settings, and mailbox CRUD/polling |
-| **Tickets** | `GET/POST /tickets`, `GET /tickets/search?q=`, `GET/PATCH/DELETE /tickets/:id`, ticket history, and notes |
+| **Tickets** | `GET/POST /tickets` (paginated `{ items, total, page, pageSize }`), `GET /tickets/search?q=`, `GET/PATCH/DELETE /tickets/:id`, ticket history, notes, and `/tickets/:id/time` |
 | **Devices** | Device CRUD/history plus ticket link/unlink routes |
-| **Probes** | `POST /probes`, `POST /probe/heartbeat`, and `POST /probe/devices` |
+| **Probes** | `POST/PATCH /probes`, `POST /probe/heartbeat`, and `POST /probe/devices` |
 | **Scripts** | Tactical catalog, device sync, immediate/scheduled jobs, and job history |
 | **Mail** | SMTP status and `POST /tickets/:id/email`; IMAP polling is managed under `/mailboxes` |
 | **Sync** | Provider list/status, inbound sync runs, and sync logs; legacy read-only `/cw/tickets/*` routes remain available |
@@ -152,7 +154,7 @@ Probes authenticate with an `X-Probe-Key` API key and are exempt from browser au
 
 ## Probes & devices
 
-A probe is a scanner deployed on a customer LAN that pushes discovered devices into AnchorDesk. The reference probe is [netviz](https://github.com/Spillers-Technology/netviz). An admin registers a probe from **Admin → Probes** (or `POST /probes`) and receives its API key once. The probe then heartbeats and posts device records, which are upserted locally, displayed in the **Network** view, and available to link to tickets.
+A probe is a scanner deployed on a customer LAN that pushes discovered devices into AnchorDesk. The reference probe is [netviz](https://github.com/Spillers-Technology/netviz). An admin registers a probe from **Admin → Probes** (or `POST /probes`) and receives its API key once. A probe can be linked to a **company**, which then flows onto every device it discovers. The probe heartbeats and posts device records, which are upserted locally, displayed in the **Network** view, and available to link to tickets.
 
 The wire contract lives in [backend/src/providers/NetVizProvider.ts](backend/src/providers/NetVizProvider.ts).
 
