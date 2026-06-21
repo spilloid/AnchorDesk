@@ -88,6 +88,11 @@ export const config = {
     user: process.env.SMTP_USER || '',
     pass: process.env.SMTP_PASS || '',
     from: process.env.SMTP_FROM || 'anchordesk@localhost',
+    // Validate the relay's TLS certificate (STARTTLS on 587/25 or implicit TLS on
+    // 465). On by default. Set SMTP_TLS_REJECT_UNAUTHORIZED=false for an internal
+    // Postfix that presents a self-signed cert — otherwise the STARTTLS upgrade
+    // fails with ESOCKET "self-signed certificate" and the send 502s.
+    tlsRejectUnauthorized: process.env.SMTP_TLS_REJECT_UNAUTHORIZED !== 'false',
   },
 
   // Attachment storage (1.7.0). backend = 'local' (disk) or 's3' (any

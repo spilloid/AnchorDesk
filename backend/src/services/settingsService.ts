@@ -20,6 +20,9 @@ export interface SmtpConfig {
   user: string;
   pass: string;
   from: string;
+  /** Validate the relay's TLS cert. False allows an internal Postfix's
+   *  self-signed cert (STARTTLS would otherwise fail with ESOCKET). */
+  tlsRejectUnauthorized: boolean;
 }
 export interface ConnectwiseConfig {
   server: string;
@@ -126,6 +129,9 @@ export async function getSmtp(): Promise<SmtpConfig> {
     user: String(v.user ?? ''),
     pass: String(v.pass ?? ''),
     from: String(v.from ?? 'anchordesk@localhost'),
+    // Default true (validate). Only an explicit false disables validation, so an
+    // older settings row missing the field stays secure.
+    tlsRejectUnauthorized: v.tlsRejectUnauthorized !== false,
   };
 }
 

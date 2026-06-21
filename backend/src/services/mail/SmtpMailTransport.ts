@@ -27,6 +27,10 @@ export class SmtpMailTransport implements MailTransport {
       port: smtp.port,
       secure: smtp.secure,
       auth: smtp.user ? { user: smtp.user, pass: smtp.pass } : undefined,
+      // Cert validation for STARTTLS/implicit TLS. Off (false) lets an internal
+      // Postfix present a self-signed cert without the STARTTLS upgrade failing
+      // with ESOCKET "self-signed certificate".
+      tls: { rejectUnauthorized: smtp.tlsRejectUnauthorized },
       // Fail fast instead of hanging the request (and tripping a 502 at the
       // ingress/CDN) when the SMTP host is unreachable or silent.
       connectionTimeout: 15_000,
