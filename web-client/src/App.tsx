@@ -68,6 +68,7 @@ function mapDbTicket(t: Record<string, unknown>): Ticket & { localId: number } {
     responseDueAt: (t.responseDueAt as string | null) ?? null,
     resolutionDueAt: (t.resolutionDueAt as string | null) ?? null,
     firstRespondedAt: (t.firstRespondedAt as string | null) ?? null,
+    labels: (t.labels as Ticket["labels"]) ?? [],
   };
 }
 
@@ -99,6 +100,7 @@ export interface TicketFilterCriteria {
   status?: string;
   assignee?: string;
   company?: string;
+  labelId?: number;
 }
 
 function App() {
@@ -136,6 +138,7 @@ function App() {
         status: filters.status || undefined,
         assignee: filters.assignee || undefined,
         company: filters.company || undefined,
+        labelId: filters.labelId || undefined,
       });
       setTickets((res.items as Record<string, unknown>[]).map(mapDbTicket));
       setTotal(res.total);

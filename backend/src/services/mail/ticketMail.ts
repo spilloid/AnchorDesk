@@ -21,6 +21,7 @@ import * as ticketRepo from '../../repositories/ticketRepository';
 import * as noteRepo from '../../repositories/noteRepository';
 import * as mailboxRepo from '../../repositories/mailboxRepository';
 import * as attachmentRepo from '../../repositories/attachmentRepository';
+import * as mailIdentityRepo from '../../repositories/mailIdentityRepository';
 import { getSmtp } from '../settingsService';
 import { readToBuffer } from '../storage';
 import { mailTransport } from './SmtpMailTransport';
@@ -31,6 +32,7 @@ import { buildReferenceChain, generateMessageId } from './threading';
 export interface SendTicketEmailInput {
   to: string | string[];
   cc?: string[];
+  bcc?: string[];
   subject: string;
   /** Raw HTML from the composer (sanitized here before send + store). */
   html?: string;
@@ -40,6 +42,41 @@ export interface SendTicketEmailInput {
   author: string;
   /** IDs of attachments already uploaded to this ticket to include + link. */
   attachmentIds?: number[];
+  /** Send-from identity (a shared box or the tech's alias). Falls back to default. */
+  fromIdentityId?: number;
+  /** Sanitized signature HTML to append to the body (the sender's signature). */
+  signatureHtml?: string;
+}
+
+/**
+ * Inline-image embedding for outbound mail. Composer/inbound HTML references our
+ * attachments by relative URL (/api/attachments/:id/download) — an external
+ * recipient can't resolve those (they're auth-gated). For sending, swap each to a
+ * `cid:` reference and attach the bytes inline so the recipient's client renders
+ * them. The STORED note keeps the relative URLs for our own UI.
+ */
+async function embedInlineImages(html: string): Promise<{ html: string; inline: OutboundAttachment[] }> {
+  const ids = new Set<number>();
+  const re = /\/api\/attachments\/(\d+)\/download/g;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(html))) ids.add(Number(m[1]));
+  if (!ids.size) return { html, inline: [] };
+
+  const inline: OutboundAttachment[] = [];
+  let out = html;
+  for (const id of ids) {
+    const a = await attachmentRepo.getById(id);
+    if (!a) continue;
+    try {
+      const content = await readToBuffer(a.storageBackend, a.storageKey);
+      const cid = `att${id}@anchordesk`;
+      inline.push({ filename: a.filename, content, contentType: a.contentType, cid });
+      out = out.split(`/api/attachments/${id}/download`).join(`cid:${cid}`);
+    } catch {
+      /* leave the URL as-is if the bytes can't be read */
+    }
+  }
+  return { html: out, inline };
 }
 
 /** Build the References chain + In-Reply-To for a ticket's existing thread. */
@@ -68,11 +105,23 @@ export async function sendTicketEmail(ticketId: number, input: SendTicketEmailIn
   if (!ticket) throw Object.assign(new Error('Ticket not found'), { statusCode: 404 });
 
   const smtp = await getSmtp();
-  const html = input.html ? sanitizeEmailHtml(input.html) : undefined;
+  // Compose the body, then append the sender's signature (already sanitized on
+  // save) so the outgoing HTML carries it without re-sanitizing it away.
+  let html = input.html ? sanitizeEmailHtml(input.html) : undefined;
+  if (input.signatureHtml) {
+    const sig = `<br><br>${input.signatureHtml}`;
+    html = (html ?? '') + sig;
+  }
   const text = input.text ?? (html ? htmlToText(html) : undefined);
 
+  // Resolve the send-from identity (header From only; envelope stays the relay).
+  const identity = input.fromIdentityId ? await mailIdentityRepo.getById(input.fromIdentityId) : null;
+  const from = identity?.enabled
+    ? { address: identity.address, name: identity.displayName ?? undefined }
+    : undefined;
+
   const thread = await buildThread(ticketId, ticket.externalId ?? null);
-  const messageId = generateMessageId(smtp.from);
+  const messageId = generateMessageId(from?.address ?? smtp.from);
   const replyTo = (await resolveReplyTo(ticket.companyName ?? null)) ?? undefined;
 
   // Pull bytes for any ticket attachments the composer selected, scoped to this
@@ -87,17 +136,24 @@ export async function sendTicketEmail(ticketId: number, input: SendTicketEmailIn
     })),
   );
 
+  // For SENDING, turn inline-image attachment URLs into cid: parts so external
+  // clients render them. The stored note keeps `html` (relative URLs) for our UI.
+  const embedded = html ? await embedInlineImages(html) : { html: undefined, inline: [] as OutboundAttachment[] };
+  const sendAttachments = [...attachments, ...embedded.inline];
+
   const { messageId: sentId } = await mailTransport.send({
     to: input.to,
     cc: input.cc,
+    bcc: input.bcc,
+    from,
     subject: input.subject,
     text,
-    html,
+    html: embedded.html ?? html,
     replyTo,
     messageId,
     inReplyTo: thread.inReplyTo,
     references: thread.references,
-    attachments: attachments.length ? attachments : undefined,
+    attachments: sendAttachments.length ? sendAttachments : undefined,
   });
 
   // Persist the message-id the transport actually used (nodemailer may keep ours
@@ -113,9 +169,10 @@ export async function sendTicketEmail(ticketId: number, input: SendTicketEmailIn
       content: text ?? '(no body)',
       htmlContent: html,
       author: input.author,
-      emailFrom: smtp.from,
+      emailFrom: from?.address ?? smtp.from,
       emailTo: toStr,
       emailCc: input.cc?.join(', '),
+      emailBcc: input.bcc?.join(', '),
       subject: input.subject,
       externalId: storedId,
       inReplyTo: thread.inReplyTo,
