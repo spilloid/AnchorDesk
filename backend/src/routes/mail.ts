@@ -26,7 +26,7 @@ export async function mailRoutes(server: FastifyInstance) {
     }
 
     const ticketId = parseInt(req.params.id);
-    const body = req.body as { to?: string | string[]; subject?: string; text?: string; html?: string; cc?: string[] };
+    const body = req.body as { to?: string | string[]; subject?: string; text?: string; html?: string; cc?: string[]; attachmentIds?: number[] };
     if (!body?.to || !body?.subject) {
       return reply.status(400).send({ error: 'to and subject are required' });
     }
@@ -43,6 +43,7 @@ export async function mailRoutes(server: FastifyInstance) {
         text: body.text,
         html: body.html,
         author,
+        attachmentIds: body.attachmentIds,
       });
       return reply.send({ ok: true, messageId });
     } catch (err) {

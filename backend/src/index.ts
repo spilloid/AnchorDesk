@@ -2,7 +2,13 @@ import fastify from 'fastify';
 import cookie from '@fastify/cookie';
 import formbody from '@fastify/formbody';
 import rateLimit from '@fastify/rate-limit';
+import multipart from '@fastify/multipart';
+import websocket from '@fastify/websocket';
 import { ticketRoutes } from './routes/tickets';
+import { attachmentRoutes } from './routes/attachments';
+import { notificationRoutes } from './routes/notifications';
+import { slaRoutes } from './routes/sla';
+import { wsRoutes } from './routes/ws';
 import { deviceRoutes } from './routes/devices';
 import { probeRoutes } from './routes/probes';
 import { scriptRoutes } from './routes/scripts';
@@ -23,6 +29,9 @@ import { seedSettings } from './services/settingsService';
 import { ensurePgExtras } from './db/pgExtras';
 import { startScriptScheduler } from './services/scriptScheduler';
 import { startImapScheduler } from './services/imapScheduler';
+import { startSlaScheduler } from './services/slaScheduler';
+import { initWsHub } from './services/realtime/wsHub';
+import { initNotificationService } from './services/notificationService';
 import { config } from './config/config';
 import { prisma } from './db/prisma';
 
@@ -39,6 +48,15 @@ async function start() {
   // are throttled. Used to slow brute-force on the auth endpoints. Single-instance
   // in-memory store; swap to a shared store (e.g. Redis) if you scale to replicas.
   await server.register(rateLimit, { global: false });
+
+  // Multipart uploads (ticket attachments). 25 MB per file; files are streamed
+  // into the configured storage backend, not buffered to a temp dir by the plugin.
+  await server.register(multipart, { limits: { fileSize: 25 * 1024 * 1024, files: 10 } });
+
+  // WebSocket transport for live updates (notifications, ticket/SLA changes).
+  // Routes opt in with { websocket: true }; the normal auth hook still runs on
+  // the upgrade request so only authenticated users get a socket.
+  await server.register(websocket);
 
   // Parse JSON request bodies. Body-less POSTs (e.g. /devices/sync, logout) often
   // still send `Content-Type: application/json` with an empty body — treat that as
@@ -73,6 +91,12 @@ async function start() {
 
   // Core local-DB routes (tickets, notes, history)
   server.register(ticketRoutes);
+  // Ticket attachments (upload/download/delete; local-disk or S3 storage)
+  server.register(attachmentRoutes);
+  // Per-user notifications (bell badge + center)
+  server.register(notificationRoutes);
+  // SLA policies (admin CRUD) — drives ticket response/resolution deadlines
+  server.register(slaRoutes);
   // Devices (local-first asset records + ticket linking)
   server.register(deviceRoutes);
   // Probes (netviz scanner registration + inbound device ingest)
@@ -89,6 +113,8 @@ async function start() {
   server.register(pingRoutes);
   // MCP server — SSE transport at /mcp/sse, messages at /mcp/messages
   server.register(mcpRoutes);
+  // WebSocket live-update channel at /ws
+  server.register(wsRoutes);
 
   // Graceful shutdown — close HTTP server then disconnect Prisma
   const shutdown = async () => {
@@ -111,9 +137,15 @@ async function start() {
   // Seed integration settings from env + hydrate runtime config.
   await seedSettings().catch((err) => server.log.error({ err }, 'Settings seed failed'));
 
+  // Wire the WebSocket hub + notification service to the in-process event bus.
+  initWsHub();
+  initNotificationService();
+
   // Poll for due scheduled script jobs + inbound email-to-ticket.
   startScriptScheduler(server.log);
   startImapScheduler(server.log);
+  // Evaluate SLA timers; emit at-risk / breach events to the live layer.
+  startSlaScheduler(server.log);
 
   // Sweep expired sessions hourly.
   setInterval(() => {

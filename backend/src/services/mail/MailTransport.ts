@@ -21,6 +21,14 @@ export interface OutboundMail {
   messageId?: string;
   inReplyTo?: string;
   references?: string[];
+  /** File attachments to include on the outgoing message. */
+  attachments?: OutboundAttachment[];
+}
+
+export interface OutboundAttachment {
+  filename: string;
+  content: Buffer;
+  contentType?: string;
 }
 
 export interface MailTransport {

@@ -1,6 +1,6 @@
 {
   "name": "anchordesk-backend",
-  "version": "1.6.0",
+  "version": "1.7.0",
   "main": "dist/src/index.js",
   "scripts": {
     "test": "jest",
@@ -20,9 +20,13 @@
   "license": "MIT",
   "description": "anchordesk backend — local-first ticketing + device/RMM API (Fastify + Prisma + PostgreSQL)",
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.1073.0",
+    "@aws-sdk/s3-request-presigner": "^3.1073.0",
     "@fastify/cookie": "^9.4.0",
     "@fastify/formbody": "^7.4.0",
+    "@fastify/multipart": "^8.3.1",
     "@fastify/rate-limit": "^9.1.0",
+    "@fastify/websocket": "^8.3.1",
     "@jest/globals": "^29.7.0",
     "@modelcontextprotocol/sdk": "^1.29.0",
     "@node-saml/node-saml": "^5.1.0",
@@ -51,6 +55,7 @@
     "@types/nodemailer": "^8.0.1",
     "@types/qrcode": "^1.5.6",
     "@types/sanitize-html": "^2.16.1",
+    "@types/ws": "^8.18.1",
     "eslint": "^9.10.0",
     "eslint-config-prettier": "^9.1.0",
     "eslint-plugin-prettier": "^5.2.1",

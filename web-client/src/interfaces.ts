@@ -51,4 +51,8 @@ export interface Ticket {
   priority: string;
   timeEntries: TimeEntry[];
   dateEntered: string;
+  // SLA deadlines (1.7.0) — drive the live SLA chip on lists/cards/board.
+  responseDueAt?: string | null;
+  resolutionDueAt?: string | null;
+  firstRespondedAt?: string | null;
 }

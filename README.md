@@ -22,8 +22,11 @@
 
 What sets it apart from a plain helpdesk: each ticket can become an operations cockpit. Link the **devices** involved, inspect their source and status, run Tactical RMM scripts, send email, and keep the resulting activity on the ticket. Core changes are recorded in an **append-only audit log** with actor and before/after data.
 
-## What ships in v1.6.0
+## What ships in v1.7.0
 
+- **📎 Attachments** — drag-and-drop files onto a ticket or attach them to an outgoing email; inbound email attachments are captured automatically. Bytes live on local disk or any **S3-compatible** store (AWS S3, MinIO, Cloudflare R2, Backblaze B2), selectable by env var or in **Admin → Integrations**.
+- **🔔 Live updates & notifications** — a WebSocket channel pushes ticket, note, and SLA changes in real time: lists, the Kanban board, and the open ticket update without a refresh, and a notification bell alerts you to assignments, customer replies, and SLA risk.
+- **⏰ SLA tracking** — per-priority / per-company response & resolution targets with live countdown chips (green → amber → red) on lists, cards, the board, and the ticket; breaches and at-risk tickets raise notifications.
 - **🎫 Local-first ticketing** — create and edit tickets, assign technicians, manage notes, filter views, and use card/table/Kanban layouts. The list is server-paginated with server-side search and filtering, so it scales past large ticket counts.
 - **🧰 Ticket cockpit** — one ticket view with status, priority, source, company & contact, assignee picker, activity timeline, time tracking, linked devices, script jobs, and email.
 - **🏢 Companies & contacts (CRM)** — first-class company and contact records, company pages, company-scoped tickets and devices, and inline contact creation from a ticket.
@@ -108,8 +111,8 @@ Open **http://localhost:5173** — `/api/*`, `/probe/*`, and `/mcp/*` are proxie
 
 For the complete Compose stack, run `docker compose up --build`. Tagged release images are published as:
 
-- `ghcr.io/spilloid/anchordesk-backend:1.6.0`
-- `ghcr.io/spilloid/anchordesk-web-client:1.6.0`
+- `ghcr.io/spilloid/anchordesk-backend:1.7.0`
+- `ghcr.io/spilloid/anchordesk-web-client:1.7.0`
 
 ## Configuration
 

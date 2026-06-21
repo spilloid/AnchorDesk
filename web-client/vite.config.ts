@@ -15,6 +15,13 @@ export default defineConfig({
       // Probe self-service + MCP keep their paths (backend serves them at root).
       '/probe': { target: 'http://backend:8060/', changeOrigin: true },
       '/mcp': { target: 'http://backend:8060/', changeOrigin: true },
+      // WebSocket live-update channel — the /api prefix is stripped to /ws.
+      '/api/ws': {
+        target: 'ws://backend:8060/',
+        ws: true,
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/api/, ''),
+      },
     }
   },
   plugins: [react()],

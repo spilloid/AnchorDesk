@@ -37,6 +37,7 @@ import EditableField from "./EditableField";
 import NotesSection from "./NotesSection";
 import RichTextEditor from "./RichTextEditor";
 import RunScriptDialog from "./RunScriptDialog";
+import SlaChip from "./SlaChip";
 import * as api from "../api/client";
 import { TICKET_STATUSES, TICKET_PRIORITIES, statusColor } from "../ticketVocab";
 
@@ -81,6 +82,12 @@ const TicketDialog: React.FC<TicketDialogProps> = ({ ticket, open, onClose, note
   const [newContact, setNewContact] = useState("");
   const [timeMinutes, setTimeMinutes] = useState(0);
   const [timeEntries, setTimeEntries] = useState<any[]>([]);
+  const [attachments, setAttachments] = useState<api.Attachment[]>([]);
+
+  const reloadAttachments = useCallback(() => {
+    if (ticket.localId == null) return;
+    api.listAttachments(ticket.localId).then(setAttachments).catch(() => setAttachments([]));
+  }, [ticket.localId]);
 
   const reloadDevices = useCallback(() => {
     if (ticket.localId == null) return;
@@ -118,6 +125,7 @@ const TicketDialog: React.FC<TicketDialogProps> = ({ ticket, open, onClose, note
     }).catch(() => setFull(null));
     reloadDevices();
     reloadTime();
+    reloadAttachments();
     api.listTicketScriptJobs(id).then((j) => setJobs(j as any[])).catch(() => setJobs([]));
     api.getMailStatus().then((m) => setMailConfigured(m.configured)).catch(() => setMailConfigured(false));
     api.listAssignees().then(setAssignees).catch(() => setAssignees([]));
@@ -217,6 +225,12 @@ const TicketDialog: React.FC<TicketDialogProps> = ({ ticket, open, onClose, note
               <Chip size="small" label={status} color={statusColor(status)} />
               <Chip size="small" variant="outlined" label={priority || "Medium"} sx={{ color: "#fff", borderColor: "rgba(255,255,255,0.5)" }} />
               {source !== "local" && <Chip size="small" icon={<SyncIcon sx={{ color: "#fff !important" }} />} label={externalProvider ?? source} sx={{ bgcolor: "rgba(255,255,255,0.18)", color: "#fff" }} />}
+              <SlaChip
+                responseDueAt={full?.responseDueAt}
+                resolutionDueAt={full?.resolutionDueAt}
+                firstRespondedAt={full?.firstRespondedAt}
+                status={status}
+              />
             </Stack>
             <Typography variant="h5" noWrap sx={{ fontWeight: 700 }}>{title || "(untitled)"}</Typography>
             <Typography variant="body2" sx={{ opacity: 0.85 }}>{companyName || "No company"}</Typography>
@@ -379,6 +393,11 @@ const TicketDialog: React.FC<TicketDialogProps> = ({ ticket, open, onClose, note
               </CardContent>
             </Card>
 
+            {/* Attachments */}
+            {ticket.localId != null && (
+              <AttachmentsCard ticketId={ticket.localId} attachments={attachments} onChange={reloadAttachments} />
+            )}
+
             {/* Integration-aware panel */}
             {hasIntegrations && (
               <Card sx={{ mt: 2 }}>
@@ -426,7 +445,7 @@ const TicketDialog: React.FC<TicketDialogProps> = ({ ticket, open, onClose, note
           to={compose.to ?? ""}
           subject={compose.subject ?? `Re: ${title}`}
           onClose={() => setCompose(null)}
-          onSent={() => { onNotesChanged?.(); }}
+          onSent={() => { onNotesChanged?.(); reloadAttachments(); }}
         />
       )}
     </Dialog>
@@ -581,6 +600,93 @@ function TimeCard({ minutes, entries, onLog, onLogRange, onDelete, onEdit }: Tim
   );
 }
 
+function fmtBytes(n: number): string {
+  if (n < 1024) return `${n} B`;
+  if (n < 1024 * 1024) return `${(n / 1024).toFixed(0)} KB`;
+  return `${(n / 1024 / 1024).toFixed(1)} MB`;
+}
+
+function AttachmentsCard({
+  ticketId,
+  attachments,
+  onChange,
+}: {
+  ticketId: number;
+  attachments: api.Attachment[];
+  onChange: () => void;
+}) {
+  const [busy, setBusy] = useState(false);
+  const [dragOver, setDragOver] = useState(false);
+  const inputRef = React.useRef<HTMLInputElement>(null);
+
+  const upload = async (files: FileList | File[]) => {
+    const list = Array.from(files);
+    if (!list.length) return;
+    setBusy(true);
+    try {
+      await api.uploadAttachments(ticketId, list);
+      onChange();
+    } catch (err) {
+      console.error("upload failed", err);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const remove = async (id: number) => {
+    try { await api.deleteAttachment(id); onChange(); }
+    catch (err) { console.error("delete attachment failed", err); }
+  };
+
+  return (
+    <Card sx={{ mt: 2 }}>
+      <CardContent>
+        <Typography variant="subtitle2" color="text.secondary" gutterBottom>
+          Attachments {attachments.length > 0 && `(${attachments.length})`}
+        </Typography>
+        <Stack spacing={1} sx={{ mb: 1.5 }}>
+          {attachments.map((a) => (
+            <Stack key={a.id} direction="row" alignItems="center" spacing={1}>
+              <Box sx={{ minWidth: 0, flexGrow: 1 }}>
+                <Typography variant="body2" noWrap component="a"
+                  href={api.attachmentDownloadUrl(a.id)} target="_blank" rel="noopener"
+                  sx={{ color: "primary.main", textDecoration: "none" }}>
+                  {a.filename}
+                </Typography>
+                <Typography variant="caption" color="text.secondary">{fmtBytes(a.size)}</Typography>
+              </Box>
+              <Tooltip title="Delete attachment">
+                <IconButton size="small" onClick={() => remove(a.id)}><Close fontSize="small" /></IconButton>
+              </Tooltip>
+            </Stack>
+          ))}
+        </Stack>
+        <Box
+          onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+          onDragLeave={() => setDragOver(false)}
+          onDrop={(e) => { e.preventDefault(); setDragOver(false); upload(e.dataTransfer.files); }}
+          onClick={() => inputRef.current?.click()}
+          sx={{
+            border: "1px dashed",
+            borderColor: dragOver ? "primary.main" : "divider",
+            borderRadius: 1,
+            p: 1.5,
+            textAlign: "center",
+            cursor: "pointer",
+            bgcolor: dragOver ? "action.hover" : "transparent",
+          }}
+        >
+          <Typography variant="caption" color="text.secondary">
+            {busy ? "Uploading…" : "Drop files here or click to upload"}
+          </Typography>
+          <input ref={inputRef} type="file" multiple hidden
+            onChange={(e) => { if (e.target.files) upload(e.target.files); e.target.value = ""; }} />
+        </Box>
+      </CardContent>
+    </Card>
+  );
+}
+
 function MetaRow({ icon, label, value }: { icon: React.ReactNode; label: string; value: string }) {
   return (
     <Stack direction="row" spacing={1} alignItems="center">
@@ -609,6 +715,7 @@ function EmailDialog({
   const [showCc, setShowCc] = useState(false);
   const [subj, setSubj] = useState(subject);
   const [html, setHtml] = useState("");
+  const [files, setFiles] = useState<File[]>([]);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const [sending, setSending] = useState(false);
 
@@ -619,12 +726,20 @@ function EmailDialog({
     setSending(true);
     setMsg(null);
     try {
+      // Upload any selected files to the ticket first, then attach them by id —
+      // this also records them on the ticket's attachment list.
+      let attachmentIds: number[] | undefined;
+      if (files.length) {
+        const uploaded = await api.uploadAttachments(ticketId, files);
+        attachmentIds = uploaded.map((a) => a.id);
+      }
       const ccList = cc.split(",").map((s) => s.trim()).filter(Boolean);
       await api.sendTicketEmail(ticketId, {
         to: to.split(",").map((s) => s.trim()).filter(Boolean),
         cc: ccList.length ? ccList : undefined,
         subject: subj,
         html,
+        attachmentIds,
       });
       setMsg({ ok: true, text: "Email sent and recorded on the ticket." });
       onSent?.();
@@ -650,6 +765,16 @@ function EmailDialog({
           {showCc && <TextField label="Cc" value={cc} onChange={(e) => setCc(e.target.value)} fullWidth size="small" />}
           <TextField label="Subject" value={subj} onChange={(e) => setSubj(e.target.value)} fullWidth size="small" />
           <RichTextEditor value={html} onChange={setHtml} />
+          <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap">
+            <Button component="label" size="small" variant="outlined">
+              Attach files
+              <input type="file" multiple hidden
+                onChange={(e) => setFiles(e.target.files ? Array.from(e.target.files) : [])} />
+            </Button>
+            {files.map((f, i) => (
+              <Chip key={i} size="small" label={f.name} onDelete={() => setFiles((prev) => prev.filter((_, j) => j !== i))} />
+            ))}
+          </Stack>
         </Stack>
       </DialogContent>
       <DialogActions>

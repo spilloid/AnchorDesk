@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import {
   Box,
   CssBaseline,
@@ -35,6 +35,7 @@ import KanbanBoard from "./components/KanbanBoard";
 import CreateTicketDialog from "./components/CreateTicketDialog";
 import { Ticket, Company, Note } from "./interfaces";
 import * as api from "./api/client";
+import { subscribeRealtime } from "./api/realtime";
 import { useAuth } from "./auth/AuthContext";
 import LoginView from "./auth/LoginView";
 import AddIcon from "@mui/icons-material/Add";
@@ -64,6 +65,9 @@ function mapDbTicket(t: Record<string, unknown>): Ticket & { localId: number } {
     technician: null,
     timeEntries: [],
     dateEntered: String(t.createdAt ?? ""),
+    responseDueAt: (t.responseDueAt as string | null) ?? null,
+    resolutionDueAt: (t.resolutionDueAt as string | null) ?? null,
+    firstRespondedAt: (t.firstRespondedAt as string | null) ?? null,
   };
 }
 
@@ -216,6 +220,36 @@ function App() {
     return () => clearTimeout(handle);
   }, [searchTerm]);
 
+  // Live updates: a shared WebSocket pushes ticket/note changes from anywhere
+  // (another tech, an inbound email, an SLA breach) so the list and the open
+  // ticket stay current without a manual refresh. Refs keep the subscription
+  // stable while still calling the latest fetchers.
+  const fetchTicketsRef = useRef(fetchTickets);
+  useEffect(() => { fetchTicketsRef.current = fetchTickets; }, [fetchTickets]);
+  const selectedRef = useRef(selectedTicket);
+  useEffect(() => { selectedRef.current = selectedTicket; }, [selectedTicket]);
+
+  useEffect(() => {
+    if (!user) return;
+    let pending: ReturnType<typeof setTimeout> | null = null;
+    const refetchSoon = () => {
+      if (pending) clearTimeout(pending);
+      pending = setTimeout(() => fetchTicketsRef.current(), 400);
+    };
+    const unsub = subscribeRealtime((event) => {
+      if (event.type === "note.added") {
+        const sel = selectedRef.current;
+        if (sel?.localId === event.ticketId) {
+          fetchTicketNotes(event.ticketId).then(setTicketNotes).catch(() => {});
+        }
+        refetchSoon();
+      } else if (event.type.startsWith("ticket.")) {
+        refetchSoon();
+      }
+    });
+    return () => { if (pending) clearTimeout(pending); unsub(); };
+  }, [user]);
+
   if (authLoading) {
     return (
       <ThemeProvider theme={defaultTheme}>
@@ -251,6 +285,7 @@ function App() {
           toggleDrawer={() => setDrawerOpen(!drawerOpen)}
           currentView={viewMode}
           viewMode={viewMode}
+          onOpenTicket={openTicketById}
         />
         <DashboardDrawer
           drawerOpen={drawerOpen}

@@ -27,6 +27,11 @@ export class SmtpMailTransport implements MailTransport {
       port: smtp.port,
       secure: smtp.secure,
       auth: smtp.user ? { user: smtp.user, pass: smtp.pass } : undefined,
+      // Fail fast instead of hanging the request (and tripping a 502 at the
+      // ingress/CDN) when the SMTP host is unreachable or silent.
+      connectionTimeout: 15_000,
+      greetingTimeout: 10_000,
+      socketTimeout: 20_000,
     });
   }
 
@@ -43,6 +48,11 @@ export class SmtpMailTransport implements MailTransport {
       messageId: mail.messageId,
       inReplyTo: mail.inReplyTo,
       references: mail.references,
+      attachments: mail.attachments?.map((a) => ({
+        filename: a.filename,
+        content: a.content,
+        contentType: a.contentType,
+      })),
     });
     return { messageId: info.messageId };
   }

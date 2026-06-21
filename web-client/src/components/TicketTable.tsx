@@ -1,6 +1,7 @@
 import * as React from "react";
 import { DataGrid, GridColDef } from "@mui/x-data-grid";
 import { Ticket } from "../interfaces";
+import SlaChip from "./SlaChip";
 
 interface TicketTableProps {
   tickets: Ticket[];
@@ -24,6 +25,23 @@ const columns: GridColDef[] = [
   { field: "ticketTitle", headerName: "Title", flex: 1, minWidth: 240 },
   { field: "status", headerName: "Status", width: 130 },
   { field: "priority", headerName: "Priority", width: 120 },
+  {
+    field: "sla",
+    headerName: "SLA",
+    width: 160,
+    sortable: false,
+    renderCell: (params) => {
+      const t = params.row.ticket as Ticket;
+      return (
+        <SlaChip
+          responseDueAt={t.responseDueAt}
+          resolutionDueAt={t.resolutionDueAt}
+          firstRespondedAt={t.firstRespondedAt}
+          status={t.status}
+        />
+      );
+    },
+  },
   { field: "companyName", headerName: "Company", width: 200 },
   { field: "dateEntered", headerName: "Created", width: 190 },
 ];
