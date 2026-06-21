@@ -33,6 +33,8 @@ export interface OutboundAttachment {
   filename: string;
   content: Buffer;
   contentType?: string;
+  /** Content-ID for inline images referenced in the HTML body as `cid:<id>`. */
+  cid?: string;
 }
 
 export interface MailTransport {

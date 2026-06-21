@@ -48,6 +48,37 @@ export interface SendTicketEmailInput {
   signatureHtml?: string;
 }
 
+/**
+ * Inline-image embedding for outbound mail. Composer/inbound HTML references our
+ * attachments by relative URL (/api/attachments/:id/download) — an external
+ * recipient can't resolve those (they're auth-gated). For sending, swap each to a
+ * `cid:` reference and attach the bytes inline so the recipient's client renders
+ * them. The STORED note keeps the relative URLs for our own UI.
+ */
+async function embedInlineImages(html: string): Promise<{ html: string; inline: OutboundAttachment[] }> {
+  const ids = new Set<number>();
+  const re = /\/api\/attachments\/(\d+)\/download/g;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(html))) ids.add(Number(m[1]));
+  if (!ids.size) return { html, inline: [] };
+
+  const inline: OutboundAttachment[] = [];
+  let out = html;
+  for (const id of ids) {
+    const a = await attachmentRepo.getById(id);
+    if (!a) continue;
+    try {
+      const content = await readToBuffer(a.storageBackend, a.storageKey);
+      const cid = `att${id}@anchordesk`;
+      inline.push({ filename: a.filename, content, contentType: a.contentType, cid });
+      out = out.split(`/api/attachments/${id}/download`).join(`cid:${cid}`);
+    } catch {
+      /* leave the URL as-is if the bytes can't be read */
+    }
+  }
+  return { html: out, inline };
+}
+
 /** Build the References chain + In-Reply-To for a ticket's existing thread. */
 async function buildThread(ticketId: number, ticketExternalId: string | null) {
   const priorIds = await prisma.note.findMany({
@@ -105,6 +136,11 @@ export async function sendTicketEmail(ticketId: number, input: SendTicketEmailIn
     })),
   );
 
+  // For SENDING, turn inline-image attachment URLs into cid: parts so external
+  // clients render them. The stored note keeps `html` (relative URLs) for our UI.
+  const embedded = html ? await embedInlineImages(html) : { html: undefined, inline: [] as OutboundAttachment[] };
+  const sendAttachments = [...attachments, ...embedded.inline];
+
   const { messageId: sentId } = await mailTransport.send({
     to: input.to,
     cc: input.cc,
@@ -112,12 +148,12 @@ export async function sendTicketEmail(ticketId: number, input: SendTicketEmailIn
     from,
     subject: input.subject,
     text,
-    html,
+    html: embedded.html ?? html,
     replyTo,
     messageId,
     inReplyTo: thread.inReplyTo,
     references: thread.references,
-    attachments: attachments.length ? attachments : undefined,
+    attachments: sendAttachments.length ? sendAttachments : undefined,
   });
 
   // Persist the message-id the transport actually used (nodemailer may keep ours

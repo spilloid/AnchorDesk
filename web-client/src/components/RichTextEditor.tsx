@@ -1,10 +1,11 @@
 // ./components/RichTextEditor.tsx
 // Lightweight WYSIWYG editor (TipTap) used for composing HTML emails from a
 // ticket. Emits HTML via onChange; the backend sanitizes before send + store.
-import React from "react";
+import React, { useEffect, useRef } from "react";
 import { useEditor, EditorContent, Editor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import Link from "@tiptap/extension-link";
+import Image from "@tiptap/extension-image";
 import { Box, ToggleButton, ToggleButtonGroup, Divider, Tooltip } from "@mui/material";
 import FormatBoldIcon from "@mui/icons-material/FormatBold";
 import FormatItalicIcon from "@mui/icons-material/FormatItalic";
@@ -18,6 +19,9 @@ interface RichTextEditorProps {
   value: string;
   onChange: (html: string) => void;
   minHeight?: number;
+  /** When set, pasted/dropped images are uploaded via this handler and inserted
+   *  by the returned URL (e.g. an attachment download URL). */
+  onImageUpload?: (file: File) => Promise<string>;
 }
 
 function Toolbar({ editor }: { editor: Editor }) {
@@ -67,15 +71,55 @@ function Toolbar({ editor }: { editor: Editor }) {
   );
 }
 
-const RichTextEditor: React.FC<RichTextEditorProps> = ({ value, onChange, minHeight = 180 }) => {
+const RichTextEditor: React.FC<RichTextEditorProps> = ({ value, onChange, minHeight = 180, onImageUpload }) => {
+  const editorRef = useRef<Editor | null>(null);
+
+  // Upload an image file then insert it at the cursor. Used by paste + drop.
+  const uploadAndInsert = (file: File) => {
+    if (!onImageUpload) return;
+    onImageUpload(file)
+      .then((url) => editorRef.current?.chain().focus().setImage({ src: url }).run())
+      .catch(() => {});
+  };
+
   const editor = useEditor({
     extensions: [
       StarterKit,
       Link.configure({ openOnClick: false, autolink: true }),
+      Image.configure({ inline: false, HTMLAttributes: { loading: "lazy" } }),
     ],
     content: value,
     onUpdate: ({ editor }) => onChange(editor.getHTML()),
+    editorProps: onImageUpload
+      ? {
+          handlePaste: (_view, event) => {
+            const imgs = Array.from(event.clipboardData?.files ?? []).filter((f) => f.type.startsWith("image/"));
+            if (!imgs.length) return false;
+            event.preventDefault();
+            imgs.forEach(uploadAndInsert);
+            return true;
+          },
+          handleDrop: (_view, event) => {
+            const imgs = Array.from((event as DragEvent).dataTransfer?.files ?? []).filter((f) => f.type.startsWith("image/"));
+            if (!imgs.length) return false;
+            event.preventDefault();
+            imgs.forEach(uploadAndInsert);
+            return true;
+          },
+        }
+      : undefined,
   });
+
+  // Keep a ref for the async insert callbacks.
+  useEffect(() => { editorRef.current = editor; }, [editor]);
+
+  // Sync external value changes (e.g. inserting a template) into the editor,
+  // guarded so typing — which round-trips through onChange — doesn't reset the cursor.
+  useEffect(() => {
+    if (editor && value !== editor.getHTML()) {
+      editor.commands.setContent(value || "", false);
+    }
+  }, [value, editor]);
 
   return (
     <Box sx={{ border: 1, borderColor: "divider", borderRadius: 1, overflow: "hidden" }}>
@@ -88,6 +132,8 @@ const RichTextEditor: React.FC<RichTextEditorProps> = ({ value, onChange, minHei
           cursor: "text",
           "& .ProseMirror": { outline: "none", minHeight: minHeight - 16 },
           "& .ProseMirror p": { my: 0.5 },
+          "& .ProseMirror img": { maxWidth: "100%", height: "auto", borderRadius: 1 },
+          "& .ProseMirror img.ProseMirror-selectednode": { outline: "2px solid", outlineColor: "primary.main" },
           "& .ProseMirror:focus": { outline: "none" },
           "& .ProseMirror blockquote": { borderLeft: 3, borderColor: "divider", pl: 1.5, color: "text.secondary", ml: 0 },
         }}

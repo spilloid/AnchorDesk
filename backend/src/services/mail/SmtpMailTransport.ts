@@ -57,6 +57,7 @@ export class SmtpMailTransport implements MailTransport {
         filename: a.filename,
         content: a.content,
         contentType: a.contentType,
+        cid: a.cid,
       })),
     });
     return { messageId: info.messageId };

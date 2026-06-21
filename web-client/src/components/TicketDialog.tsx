@@ -902,9 +902,19 @@ function EmailDialog({
             )}
           </Stack>
 
-          <RichTextEditor value={html} onChange={setHtml} />
+          <RichTextEditor
+            value={html}
+            onChange={setHtml}
+            onImageUpload={async (file) => {
+              const [a] = await api.uploadAttachments(ticketId, [file]);
+              return api.attachmentDownloadUrl(a.id);
+            }}
+          />
 
           <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap">
+            <Typography variant="caption" color="text.secondary" sx={{ width: "100%" }}>
+              Tip: paste or drop an image into the message to embed it inline.
+            </Typography>
             <Button component="label" size="small" variant="outlined">
               Attach files
               <input type="file" multiple hidden

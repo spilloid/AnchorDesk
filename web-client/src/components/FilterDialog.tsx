@@ -30,8 +30,10 @@ const FilterDialog: React.FC<FilterDialogProps> = ({ open, onClose, value, apply
   const [status, setStatus] = useState(value.status ?? "");
   const [company, setCompany] = useState(value.company ?? "");
   const [assignee, setAssignee] = useState(value.assignee ?? "");
+  const [labelId, setLabelId] = useState<number | "">(value.labelId ?? "");
   const [companies, setCompanies] = useState<string[]>([]);
   const [assignees, setAssignees] = useState<string[]>([]);
+  const [labels, setLabels] = useState<api.Label[]>([]);
 
   // Re-sync local fields whenever the dialog opens with the active criteria.
   useEffect(() => {
@@ -39,12 +41,19 @@ const FilterDialog: React.FC<FilterDialogProps> = ({ open, onClose, value, apply
     setStatus(value.status ?? "");
     setCompany(value.company ?? "");
     setAssignee(value.assignee ?? "");
+    setLabelId(value.labelId ?? "");
     api.listCompanies().then((cs) => setCompanies(cs.map((c) => c.name))).catch(() => setCompanies([]));
     api.listAssignees().then((as) => setAssignees(as.map((a) => a.displayName || a.username))).catch(() => setAssignees([]));
+    api.listLabels().then(setLabels).catch(() => setLabels([]));
   }, [open, value]);
 
-  const apply = () => applyFilters({ status: status || undefined, company: company || undefined, assignee: assignee || undefined });
-  const clear = () => { setStatus(""); setCompany(""); setAssignee(""); applyFilters({}); };
+  const apply = () => applyFilters({
+    status: status || undefined,
+    company: company || undefined,
+    assignee: assignee || undefined,
+    labelId: labelId === "" ? undefined : labelId,
+  });
+  const clear = () => { setStatus(""); setCompany(""); setAssignee(""); setLabelId(""); applyFilters({}); };
 
   return (
     <Dialog open={open} onClose={onClose} fullWidth maxWidth="xs">
@@ -72,6 +81,13 @@ const FilterDialog: React.FC<FilterDialogProps> = ({ open, onClose, value, apply
             onChange={(_e, v) => setAssignee(v ?? "")}
             onInputChange={(_e, v) => setAssignee(v)}
             renderInput={(params) => <TextField {...params} label="Assignee" />}
+          />
+          <Autocomplete
+            options={labels}
+            getOptionLabel={(l) => l.name}
+            value={labels.find((l) => l.id === labelId) ?? null}
+            onChange={(_e, v) => setLabelId(v ? v.id : "")}
+            renderInput={(params) => <TextField {...params} label="Label" />}
           />
         </Stack>
       </DialogContent>

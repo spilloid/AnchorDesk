@@ -100,6 +100,7 @@ export interface TicketFilterCriteria {
   status?: string;
   assignee?: string;
   company?: string;
+  labelId?: number;
 }
 
 function App() {
@@ -137,6 +138,7 @@ function App() {
         status: filters.status || undefined,
         assignee: filters.assignee || undefined,
         company: filters.company || undefined,
+        labelId: filters.labelId || undefined,
       });
       setTickets((res.items as Record<string, unknown>[]).map(mapDbTicket));
       setTotal(res.total);
