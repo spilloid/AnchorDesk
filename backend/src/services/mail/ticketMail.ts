@@ -20,8 +20,11 @@ import { prisma } from '../../db/prisma';
 import * as ticketRepo from '../../repositories/ticketRepository';
 import * as noteRepo from '../../repositories/noteRepository';
 import * as mailboxRepo from '../../repositories/mailboxRepository';
+import * as attachmentRepo from '../../repositories/attachmentRepository';
 import { getSmtp } from '../settingsService';
+import { readToBuffer } from '../storage';
 import { mailTransport } from './SmtpMailTransport';
+import { OutboundAttachment } from './MailTransport';
 import { sanitizeEmailHtml, htmlToText } from './sanitizeHtml';
 import { buildReferenceChain, generateMessageId } from './threading';
 
@@ -35,6 +38,8 @@ export interface SendTicketEmailInput {
   text?: string;
   /** Display name of the technician sending (for the note author). */
   author: string;
+  /** IDs of attachments already uploaded to this ticket to include + link. */
+  attachmentIds?: number[];
 }
 
 /** Build the References chain + In-Reply-To for a ticket's existing thread. */
@@ -70,6 +75,18 @@ export async function sendTicketEmail(ticketId: number, input: SendTicketEmailIn
   const messageId = generateMessageId(smtp.from);
   const replyTo = (await resolveReplyTo(ticket.companyName ?? null)) ?? undefined;
 
+  // Pull bytes for any ticket attachments the composer selected, scoped to this
+  // ticket so a caller can't exfiltrate another ticket's files by id.
+  const attachmentIds = input.attachmentIds ?? [];
+  const attachmentRows = attachmentIds.length ? await attachmentRepo.listByIds(ticketId, attachmentIds) : [];
+  const attachments: OutboundAttachment[] = await Promise.all(
+    attachmentRows.map(async (a) => ({
+      filename: a.filename,
+      content: await readToBuffer(a.storageBackend, a.storageKey),
+      contentType: a.contentType,
+    })),
+  );
+
   const { messageId: sentId } = await mailTransport.send({
     to: input.to,
     cc: input.cc,
@@ -80,6 +97,7 @@ export async function sendTicketEmail(ticketId: number, input: SendTicketEmailIn
     messageId,
     inReplyTo: thread.inReplyTo,
     references: thread.references,
+    attachments: attachments.length ? attachments : undefined,
   });
 
   // Persist the message-id the transport actually used (nodemailer may keep ours
@@ -104,6 +122,11 @@ export async function sendTicketEmail(ticketId: number, input: SendTicketEmailIn
     },
     input.author
   );
+
+  // Link the included attachments to the email note so they render in-context.
+  if (attachmentRows.length) {
+    await attachmentRepo.attachToNote(attachmentRows.map((a) => a.id), note.id);
+  }
 
   return { messageId: storedId, note };
 }

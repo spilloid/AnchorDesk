@@ -226,17 +226,32 @@ export function getAuditLog(opts: { entityType?: string; action?: string; limit?
 
 // ─── Integrations ────────────────────────────────────────────────────────────
 
+export interface StorageView {
+  backend?: "local" | "s3";
+  localDir?: string;
+  s3Endpoint?: string;
+  s3Region?: string;
+  s3Bucket?: string;
+  s3AccessKeyId?: string;
+  s3ForcePathStyle?: boolean;
+  hasS3SecretAccessKey?: boolean;
+}
+
 export interface IntegrationsView {
   smtp: { host?: string; port?: number; secure?: boolean; user?: string; from?: string; hasPass?: boolean };
   connectwise: { server?: string; company?: string; publicKey?: string; hasPrivateKey?: boolean; hasClientId?: boolean };
   tactical: { apiUrl?: string; hasApiKey?: boolean };
+  storage: StorageView;
 }
 
 export function getIntegrations() {
   return request<IntegrationsView>("/integrations");
 }
 
-export function updateIntegration(key: "smtp" | "connectwise" | "tactical", data: Record<string, unknown>) {
+export function updateIntegration(
+  key: "smtp" | "connectwise" | "tactical" | "storage",
+  data: Record<string, unknown>
+) {
   return request<Record<string, unknown>>(`/integrations/${key}`, { method: "PATCH", body: JSON.stringify(data) });
 }
 
@@ -547,12 +562,106 @@ export function getMailStatus() {
 
 export function sendTicketEmail(
   ticketId: number,
-  data: { to: string | string[]; subject: string; text?: string; html?: string; cc?: string[] }
+  data: { to: string | string[]; subject: string; text?: string; html?: string; cc?: string[]; attachmentIds?: number[] }
 ) {
   return request<{ ok: boolean; messageId: string }>(`/tickets/${ticketId}/email`, {
     method: 'POST',
     body: JSON.stringify(data),
   });
+}
+
+// ─── Attachments ───────────────────────────────────────────────────────────────
+
+export interface Attachment {
+  id: number;
+  ticketId: number;
+  noteId: number | null;
+  filename: string;
+  contentType: string;
+  size: number;
+  storageBackend: string;
+  createdBy: string | null;
+  createdAt: string;
+}
+
+export function listAttachments(ticketId: number) {
+  return request<Attachment[]>(`/tickets/${ticketId}/attachments`);
+}
+
+/** Upload one or more files to a ticket via multipart/form-data. */
+export async function uploadAttachments(ticketId: number, files: File[]): Promise<Attachment[]> {
+  const form = new FormData();
+  for (const f of files) form.append("file", f, f.name);
+  const headers: Record<string, string> = {};
+  if (authToken) headers["Authorization"] = `Bearer ${authToken}`;
+  const res = await fetch(`/api/tickets/${ticketId}/attachments`, {
+    method: "POST",
+    body: form, // browser sets the multipart boundary Content-Type
+    headers,
+    credentials: "same-origin",
+  });
+  if (!res.ok) throw new ApiError(res.status, await res.text(), `Upload failed (${res.status})`);
+  return res.json() as Promise<Attachment[]>;
+}
+
+/** URL the browser can hit directly to download an attachment (cookie auth). */
+export function attachmentDownloadUrl(id: number): string {
+  return `/api/attachments/${id}/download`;
+}
+
+export function deleteAttachment(id: number) {
+  return request<void>(`/attachments/${id}`, { method: "DELETE" });
+}
+
+// ─── Notifications ─────────────────────────────────────────────────────────────
+
+export interface NotificationItem {
+  id: number;
+  type: string;
+  ticketId: number | null;
+  title: string;
+  body: string | null;
+  readAt: string | null;
+  createdAt: string;
+}
+
+export function listNotifications(unreadOnly = false) {
+  return request<{ items: NotificationItem[]; unread: number }>(
+    `/notifications?unreadOnly=${unreadOnly}`
+  );
+}
+
+export function markNotificationRead(id: number) {
+  return request<{ unread: number }>(`/notifications/${id}/read`, { method: "POST" });
+}
+
+export function markAllNotificationsRead() {
+  return request<{ unread: number }>(`/notifications/read-all`, { method: "POST" });
+}
+
+// ─── SLA policies ──────────────────────────────────────────────────────────────
+
+export interface SlaPolicy {
+  id: number;
+  name: string;
+  priority: string | null;
+  companyId: number | null;
+  responseMinutes: number;
+  resolutionMinutes: number;
+  enabled: boolean;
+}
+
+export function listSlaPolicies() {
+  return request<SlaPolicy[]>("/sla/policies");
+}
+export function createSlaPolicy(data: Partial<SlaPolicy>) {
+  return request<SlaPolicy>("/sla/policies", { method: "POST", body: JSON.stringify(data) });
+}
+export function updateSlaPolicy(id: number, data: Partial<SlaPolicy>) {
+  return request<SlaPolicy>(`/sla/policies/${id}`, { method: "PATCH", body: JSON.stringify(data) });
+}
+export function deleteSlaPolicy(id: number) {
+  return request<void>(`/sla/policies/${id}`, { method: "DELETE" });
 }
 
 // ─── RMM / scripts ─────────────────────────────────────────────────────────────

@@ -40,10 +40,12 @@ import SyncIcon from "@mui/icons-material/Sync";
 import RouterIcon from "@mui/icons-material/Router";
 import DevicesIcon from "@mui/icons-material/Devices";
 import HistoryIcon from "@mui/icons-material/History";
+import TimerIcon from "@mui/icons-material/Timer";
 import * as api from "../api/client";
+import { TICKET_PRIORITIES } from "../ticketVocab";
 
 type AdminSection =
-  | "overview" | "users" | "auth" | "integrations" | "mailboxes"
+  | "overview" | "users" | "auth" | "integrations" | "sla" | "mailboxes"
   | "providers" | "probes" | "devices" | "audit";
 
 const NAV: { id: AdminSection; label: string; icon: React.ReactNode }[] = [
@@ -51,6 +53,7 @@ const NAV: { id: AdminSection; label: string; icon: React.ReactNode }[] = [
   { id: "users", label: "Users & Roles", icon: <PeopleIcon /> },
   { id: "auth", label: "Authentication", icon: <SecurityIcon /> },
   { id: "integrations", label: "Integrations", icon: <CableIcon /> },
+  { id: "sla", label: "SLA Policies", icon: <TimerIcon /> },
   { id: "mailboxes", label: "Mailboxes", icon: <EmailIcon /> },
   { id: "providers", label: "Sync Providers", icon: <SyncIcon /> },
   { id: "probes", label: "Probes", icon: <RouterIcon /> },
@@ -82,6 +85,7 @@ export default function AdminView() {
         {section === "users" && <UsersPanel />}
         {section === "auth" && <AuthSettingsPanel />}
         {section === "integrations" && <IntegrationsPanel />}
+        {section === "sla" && <SlaPanel />}
         {section === "mailboxes" && <MailboxesPanel />}
         {section === "providers" && <ProvidersPanel />}
         {section === "probes" && <ProbesPanel />}
@@ -574,7 +578,7 @@ function IntegrationsPanel() {
   const { data, loading, error, reload } = useAsync(() => api.getIntegrations());
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
 
-  const save = async (key: "smtp" | "connectwise" | "tactical", patch: Record<string, unknown>) => {
+  const save = async (key: "smtp" | "connectwise" | "tactical" | "storage", patch: Record<string, unknown>) => {
     setMsg(null);
     try {
       await api.updateIntegration(key, patch);
@@ -630,11 +634,27 @@ function IntegrationsPanel() {
         ]}
         onSave={(patch) => save("tactical", patch)}
       />
+
+      <IntegrationCard
+        title="Attachment storage"
+        configured={data.storage.backend === "s3" ? !!data.storage.s3Bucket : true}
+        fields={[
+          { k: "backend", label: "Backend", value: data.storage.backend ?? "local", type: "select", options: ["local", "s3"] },
+          { k: "localDir", label: "Local directory (local backend)", value: data.storage.localDir },
+          { k: "s3Bucket", label: "S3 bucket", value: data.storage.s3Bucket },
+          { k: "s3Endpoint", label: "S3 endpoint (MinIO/R2/B2)", value: data.storage.s3Endpoint },
+          { k: "s3Region", label: "S3 region", value: data.storage.s3Region },
+          { k: "s3AccessKeyId", label: "S3 access key ID", value: data.storage.s3AccessKeyId },
+          { k: "s3SecretAccessKey", label: "S3 secret access key", secret: true, has: data.storage.hasS3SecretAccessKey },
+          { k: "s3ForcePathStyle", label: "Force path-style (MinIO/B2)", value: data.storage.s3ForcePathStyle, type: "bool" },
+        ]}
+        onSave={(patch) => save("storage", patch)}
+      />
     </Stack>
   );
 }
 
-interface IField { k: string; label: string; value?: unknown; secret?: boolean; has?: boolean; type?: "number" | "bool" }
+interface IField { k: string; label: string; value?: unknown; secret?: boolean; has?: boolean; type?: "number" | "bool" | "select"; options?: string[] }
 
 function IntegrationCard({ title, configured, fields, onSave }: { title: string; configured: boolean; fields: IField[]; onSave: (patch: Record<string, unknown>) => void }) {
   const [draft, setDraft] = useState<Record<string, unknown>>({});
@@ -652,6 +672,14 @@ function IntegrationCard({ title, configured, fields, onSave }: { title: string;
             <label key={f.k}>
               <Switch checked={f.k in draft ? !!draft[f.k] : !!f.value} onChange={(e) => set(f.k, e.target.checked)} /> {f.label}
             </label>
+          ) : f.type === "select" ? (
+            <Box key={f.k}>
+              <Typography variant="caption" color="text.secondary">{f.label}</Typography>
+              <Select fullWidth size="small" value={f.k in draft ? String(draft[f.k]) : String(f.value ?? "")}
+                onChange={(e) => set(f.k, e.target.value)}>
+                {(f.options ?? []).map((o) => <MenuItem key={o} value={o}>{o}</MenuItem>)}
+              </Select>
+            </Box>
           ) : (
             <TextField
               key={f.k}
@@ -739,6 +767,94 @@ function MailboxesPanel() {
               </TableRow>
             ))}
             {(data ?? []).length === 0 && <TableRow><TableCell colSpan={7}>No mailboxes configured.</TableCell></TableRow>}
+          </TableBody>
+        </Table>
+      </Paper>
+    </Stack>
+  );
+}
+
+function SlaPanel() {
+  const { data, loading, error, reload } = useAsync(() => api.listSlaPolicies());
+  const [companies, setCompanies] = useState<api.Company[]>([]);
+  const [form, setForm] = useState({ name: "", priority: "", companyId: "", responseMinutes: 60, resolutionMinutes: 480 });
+  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+
+  useEffect(() => { api.listCompanies().then(setCompanies).catch(() => setCompanies([])); }, []);
+
+  const companyName = (id: number | null) => companies.find((c) => c.id === id)?.name ?? "Any";
+
+  const act = async (fn: () => Promise<unknown>, okText?: string) => {
+    setMsg(null);
+    try { await fn(); if (okText) setMsg({ ok: true, text: okText }); reload(); }
+    catch (e) { setMsg({ ok: false, text: errText(e) }); }
+  };
+
+  const create = () => act(async () => {
+    await api.createSlaPolicy({
+      name: form.name,
+      priority: form.priority || null,
+      companyId: form.companyId ? Number(form.companyId) : null,
+      responseMinutes: Number(form.responseMinutes),
+      resolutionMinutes: Number(form.resolutionMinutes),
+    });
+    setForm({ name: "", priority: "", companyId: "", responseMinutes: 60, resolutionMinutes: 480 });
+  }, "SLA policy created");
+
+  if (loading) return <CircularProgress />;
+  if (error) return <Alert severity="error">{error}</Alert>;
+
+  return (
+    <Stack spacing={2}>
+      <Typography variant="h5">SLA Policies</Typography>
+      {msg && <Alert severity={msg.ok ? "success" : "error"} onClose={() => setMsg(null)}>{msg.text}</Alert>}
+      <Alert severity="info">
+        Each policy sets response &amp; resolution targets (in minutes). The most specific match wins:
+        company + priority &gt; company &gt; priority &gt; a global default (leave both blank). Tickets are scored
+        on create and when priority/company changes.
+      </Alert>
+
+      <Paper variant="outlined" sx={{ p: 2 }}>
+        <Typography variant="subtitle2" sx={{ mb: 1 }}>Add policy</Typography>
+        <Stack direction={{ xs: "column", sm: "row" }} spacing={1} flexWrap="wrap" useFlexGap>
+          <TextField size="small" label="Name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
+          <Select size="small" displayEmpty value={form.priority} onChange={(e) => setForm({ ...form, priority: e.target.value })} sx={{ minWidth: 130 }}>
+            <MenuItem value="">Any priority</MenuItem>
+            {TICKET_PRIORITIES.map((p) => <MenuItem key={p} value={p}>{p}</MenuItem>)}
+          </Select>
+          <Select size="small" displayEmpty value={form.companyId} onChange={(e) => setForm({ ...form, companyId: e.target.value })} sx={{ minWidth: 160 }}>
+            <MenuItem value="">Any company</MenuItem>
+            {companies.map((c) => <MenuItem key={c.id} value={String(c.id)}>{c.name}</MenuItem>)}
+          </Select>
+          <TextField size="small" label="Response (min)" type="number" sx={{ width: 130 }} value={form.responseMinutes} onChange={(e) => setForm({ ...form, responseMinutes: Number(e.target.value) })} />
+          <TextField size="small" label="Resolution (min)" type="number" sx={{ width: 140 }} value={form.resolutionMinutes} onChange={(e) => setForm({ ...form, resolutionMinutes: Number(e.target.value) })} />
+          <Button variant="contained" disabled={!form.name} onClick={create}>Add</Button>
+        </Stack>
+      </Paper>
+
+      <Paper variant="outlined">
+        <Table size="small">
+          <TableHead>
+            <TableRow>
+              <TableCell>Name</TableCell><TableCell>Priority</TableCell><TableCell>Company</TableCell>
+              <TableCell>Response</TableCell><TableCell>Resolution</TableCell><TableCell>Enabled</TableCell><TableCell align="right"></TableCell>
+            </TableRow>
+          </TableHead>
+          <TableBody>
+            {(data ?? []).map((p) => (
+              <TableRow key={p.id}>
+                <TableCell>{p.name}</TableCell>
+                <TableCell>{p.priority ?? "Any"}</TableCell>
+                <TableCell>{companyName(p.companyId)}</TableCell>
+                <TableCell>{p.responseMinutes} min</TableCell>
+                <TableCell>{p.resolutionMinutes} min</TableCell>
+                <TableCell><Switch checked={p.enabled} onChange={(e) => act(() => api.updateSlaPolicy(p.id, { enabled: e.target.checked }))} /></TableCell>
+                <TableCell align="right">
+                  <IconButton size="small" onClick={() => act(() => api.deleteSlaPolicy(p.id))}><DeleteIcon fontSize="small" /></IconButton>
+                </TableCell>
+              </TableRow>
+            ))}
+            {(data ?? []).length === 0 && <TableRow><TableCell colSpan={7}>No SLA policies — tickets won't have deadlines until you add one.</TableCell></TableRow>}
           </TableBody>
         </Table>
       </Paper>

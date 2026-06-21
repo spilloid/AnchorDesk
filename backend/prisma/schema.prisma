@@ -32,9 +32,10 @@ model User {
   createdAt         DateTime     @default(now()) @map("created_at")
   updatedAt         DateTime     @updatedAt @map("updated_at")
 
-  assignedTickets Ticket[]  @relation("AssignedTickets")
-  authoredNotes   Note[]    @relation("AuthoredNotes")
+  assignedTickets Ticket[]       @relation("AssignedTickets")
+  authoredNotes   Note[]         @relation("AuthoredNotes")
   sessions        Session[]
+  notifications   Notification[]
 
   @@unique([authProvider, subject])
   @@map("users")
@@ -176,6 +177,13 @@ model Ticket {
   source           TicketSource @default(local)
   externalId       String?      @map("external_id") @db.VarChar(100)
   externalProvider String?      @map("external_provider") @db.VarChar(50)
+  // SLA tracking. The resolved policy (slaPolicyId) yields response/resolution
+  // deadlines, recomputed when priority or company changes. firstRespondedAt is
+  // stamped on the first outbound tech note/email and freezes the response clock.
+  slaPolicyId      Int?         @map("sla_policy_id")
+  responseDueAt    DateTime?    @map("response_due_at")
+  resolutionDueAt  DateTime?    @map("resolution_due_at")
+  firstRespondedAt DateTime?    @map("first_responded_at")
   closedAt         DateTime?    @map("closed_at")
   createdAt        DateTime     @default(now()) @map("created_at")
   updatedAt        DateTime     @updatedAt @map("updated_at")
@@ -183,13 +191,18 @@ model Ticket {
   assigneeUser User?        @relation("AssignedTickets", fields: [assigneeId], references: [id])
   company      Company?     @relation(fields: [companyId], references: [id], onDelete: SetNull)
   contact      Contact?     @relation(fields: [contactId], references: [id], onDelete: SetNull)
+  slaPolicy    SlaPolicy?   @relation(fields: [slaPolicyId], references: [id], onDelete: SetNull)
   notes        Note[]
   syncEntries  SyncLog[]
   deviceLinks  DeviceLink[]
   scriptJobs   ScriptJob[]
+  attachments  Attachment[]
+  notifications Notification[]
 
   @@unique([externalId, externalProvider])
   @@index([companyId])
+  @@index([responseDueAt])
+  @@index([resolutionDueAt])
   @@map("tickets")
 }
 
@@ -220,10 +233,75 @@ model Note {
   createdAt  DateTime  @default(now()) @map("created_at")
   updatedAt  DateTime  @updatedAt @map("updated_at")
 
-  ticket     Ticket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
-  authorUser User?  @relation("AuthoredNotes", fields: [authorId], references: [id])
+  ticket      Ticket       @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  authorUser  User?        @relation("AuthoredNotes", fields: [authorId], references: [id])
+  attachments Attachment[]
 
   @@map("notes")
+}
+
+// A file attached to a ticket (and optionally to a specific note, e.g. an email
+// attachment). Bytes live in object storage (local disk or S3-compatible) keyed
+// by storageKey; only metadata is in Postgres. storageBackend records which
+// backend holds the bytes so downloads resolve correctly after a config change.
+model Attachment {
+  id             Int      @id @default(autoincrement())
+  ticketId       Int      @map("ticket_id")
+  noteId         Int?     @map("note_id")
+  filename       String   @db.VarChar(500)
+  contentType    String   @default("application/octet-stream") @map("content_type") @db.VarChar(150)
+  size           Int      @default(0)
+  storageBackend String   @default("local") @map("storage_backend") @db.VarChar(20)
+  storageKey     String   @map("storage_key") @db.VarChar(500)
+  createdBy      String?  @map("created_by") @db.VarChar(255)
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  ticket Ticket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  note   Note?  @relation(fields: [noteId], references: [id], onDelete: Cascade)
+
+  @@index([ticketId])
+  @@index([noteId])
+  @@map("attachments")
+}
+
+// A per-user notification, persisted so the bell badge survives reconnects and
+// the WebSocket layer can replay unread items. Live delivery is best-effort over
+// the socket; this table is the durable source of truth.
+model Notification {
+  id        Int       @id @default(autoincrement())
+  userId    Int       @map("user_id")
+  type      String    @db.VarChar(50)
+  ticketId  Int?      @map("ticket_id")
+  title     String    @db.VarChar(255)
+  body      String?   @db.Text
+  readAt    DateTime? @map("read_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+
+  user   User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  ticket Ticket? @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+
+  @@index([userId, readAt])
+  @@map("notifications")
+}
+
+// An SLA policy: response + resolution targets (minutes) that apply to tickets
+// matched by priority and/or company. Resolution precedence when a ticket is
+// scored: company+priority > company > priority > global default (both null).
+model SlaPolicy {
+  id               Int      @id @default(autoincrement())
+  name             String   @db.VarChar(150)
+  priority         String?  @db.VarChar(50)
+  companyId        Int?     @map("company_id")
+  responseMinutes  Int      @map("response_minutes")
+  resolutionMinutes Int     @map("resolution_minutes")
+  enabled          Boolean  @default(true)
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+
+  tickets Ticket[]
+
+  @@index([companyId])
+  @@map("sla_policies")
 }
 
 // Polymorphic append-only log. entityType + entityId identify the target

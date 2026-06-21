@@ -63,6 +63,22 @@ export const config = {
     from: process.env.SMTP_FROM || 'anchordesk@localhost',
   },
 
+  // Attachment storage (1.7.0). backend = 'local' (disk) or 's3' (any
+  // S3-compatible store: AWS, MinIO, Cloudflare R2, Backblaze B2). These seed the
+  // `storage` settings row on first boot; the DB row wins and is editable in
+  // Admin → Integrations. For S3-compatible providers set `endpoint` and usually
+  // `forcePathStyle=true`.
+  storage: {
+    backend: (process.env.STORAGE_BACKEND || 'local') as 'local' | 's3',
+    localDir: process.env.STORAGE_LOCAL_DIR || './data/attachments',
+    s3Endpoint: process.env.S3_ENDPOINT || '',
+    s3Region: process.env.S3_REGION || 'us-east-1',
+    s3Bucket: process.env.S3_BUCKET || '',
+    s3AccessKeyId: process.env.S3_ACCESS_KEY_ID || '',
+    s3SecretAccessKey: process.env.S3_SECRET_ACCESS_KEY || '',
+    s3ForcePathStyle: process.env.S3_FORCE_PATH_STYLE === 'true',
+  },
+
   // Tactical RMM (optional) — enables device sync + running scripts on devices.
   // apiUrl is the API base of your Tactical instance, e.g. https://api.rmm.example.com
   trmm: {

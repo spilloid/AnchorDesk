@@ -8,17 +8,20 @@ import {
 } from "@mui/material";
 import MenuIcon from "@mui/icons-material/Menu";
 import AccountMenu from "../auth/AccountMenu";
+import NotificationBell from "./NotificationBell";
 
 interface DashboardAppBarProps {
   drawerOpen: boolean;
   toggleDrawer: () => void;
   currentView: string;
   viewMode: "cards" | "table" | "kanban" | "sync" | "admin" | "network" | "companies";
+  onOpenTicket?: (ticketId: number) => void;
 }
 
 const DashboardAppBar: React.FC<DashboardAppBarProps> = ({
   toggleDrawer,
   currentView,
+  onOpenTicket,
 }) => {
   // Dynamically set the title based on the current view
   const getTitle = () => {
@@ -60,6 +63,7 @@ const DashboardAppBar: React.FC<DashboardAppBarProps> = ({
           Dashboard - {getTitle()}
         </Typography>
         <Box sx={{ flexGrow: 1 }} />
+        <NotificationBell onOpenTicket={onOpenTicket} />
         <AccountMenu />
       </Toolbar>
     </AppBar>

@@ -1,6 +1,7 @@
 import { NoteType } from '@prisma/client';
 import { prisma } from '../db/prisma';
 import * as audit from './auditRepository';
+import { publish } from '../services/realtime/eventBus';
 
 export interface CreateNoteInput {
   content: string;
@@ -72,6 +73,16 @@ export async function create(ticketId: number, input: CreateNoteInput, actorSub:
     newValue: note as unknown as Record<string, unknown>,
   });
 
+  // First outbound email is the customer-facing "first response" — stop the SLA
+  // response clock once. Guarded on null so later replies don't move it.
+  if (note.noteType === 'email' && note.direction === 'outbound') {
+    await prisma.ticket.updateMany({
+      where: { id: ticketId, firstRespondedAt: null },
+      data: { firstRespondedAt: note.createdAt },
+    });
+  }
+
+  publish({ type: 'note.added', ticketId, note, actor: actorSub });
   return note;
 }
 

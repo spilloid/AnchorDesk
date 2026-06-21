@@ -1,6 +1,8 @@
 import { Prisma, TicketSource } from '@prisma/client';
 import { prisma } from '../db/prisma';
 import * as audit from './auditRepository';
+import { publish } from '../services/realtime/eventBus';
+import { computeSlaFields } from '../services/sla';
 
 export interface TicketListOptions {
   status?: string;
@@ -103,7 +105,14 @@ export async function listPaged(opts: TicketListOptions = {}) {
 export async function getById(id: number) {
   return prisma.ticket.findUnique({
     where: { id },
-    include: { assigneeUser: true, company: true, contact: true, notes: { orderBy: { createdAt: 'desc' } } },
+    include: {
+      assigneeUser: true,
+      company: true,
+      contact: true,
+      notes: { orderBy: { createdAt: 'desc' } },
+      attachments: { orderBy: { createdAt: 'asc' } },
+      slaPolicy: true,
+    },
   });
 }
 
@@ -151,6 +160,8 @@ export async function search(q: string, limit = 50) {
 export async function create(input: CreateTicketInput, actorSub: string) {
   // If linked to a Company, keep companyName in sync with the Company record.
   const companyName = input.companyId ? await companyNameFor(input.companyId) : input.companyName;
+  // Score SLA at creation time; deadlines are anchored to "now" (= createdAt).
+  const sla = await computeSlaFields(input.priority, input.companyId, new Date());
   const ticket = await prisma.ticket.create({
     data: {
       title: input.title,
@@ -167,6 +178,9 @@ export async function create(input: CreateTicketInput, actorSub: string) {
       ticketNumber: input.ticketNumber,
       externalId: input.externalId,
       externalProvider: input.externalProvider,
+      slaPolicyId: sla.slaPolicyId ?? undefined,
+      responseDueAt: sla.responseDueAt,
+      resolutionDueAt: sla.resolutionDueAt,
     },
   });
 
@@ -178,6 +192,7 @@ export async function create(input: CreateTicketInput, actorSub: string) {
     newValue: ticket as unknown as Record<string, unknown>,
   });
 
+  publish({ type: 'ticket.created', ticketId: ticket.id, ticket, actor: actorSub });
   return ticket;
 }
 
@@ -191,6 +206,21 @@ export async function update(id: number, input: UpdateTicketInput, actorSub: str
     data.companyName = input.companyId ? await companyNameFor(input.companyId) : null;
   }
 
+  // Recompute SLA deadlines when priority or company changes, anchored to the
+  // original creation time so the clock isn't reset by an edit.
+  const priorityChanged = input.priority !== undefined && input.priority !== before.priority;
+  const companyChanged = input.companyId !== undefined && input.companyId !== before.companyId;
+  if (priorityChanged || companyChanged) {
+    const sla = await computeSlaFields(
+      input.priority ?? before.priority,
+      input.companyId ?? before.companyId,
+      before.createdAt,
+    );
+    data.slaPolicyId = sla.slaPolicyId;
+    data.responseDueAt = sla.responseDueAt;
+    data.resolutionDueAt = sla.resolutionDueAt;
+  }
+
   const ticket = await prisma.ticket.update({ where: { id }, data });
 
   await audit.record({
@@ -200,6 +230,19 @@ export async function update(id: number, input: UpdateTicketInput, actorSub: str
     changedBy: actorSub,
     oldValue: before as unknown as Record<string, unknown>,
     newValue: ticket as unknown as Record<string, unknown>,
+  });
+
+  // Surface assignment changes so the notification service can alert the new
+  // assignee; include the previous assignee so it can avoid self-notifying.
+  const assigneeChanged =
+    (input.assigneeId !== undefined && input.assigneeId !== before.assigneeId) ||
+    (input.assignee !== undefined && input.assignee !== before.assignee);
+  publish({
+    type: 'ticket.updated',
+    ticketId: id,
+    ticket,
+    actor: actorSub,
+    changes: assigneeChanged ? { assigneeId: ticket.assigneeId, prevAssigneeId: before.assigneeId } : undefined,
   });
 
   return ticket;
@@ -223,6 +266,7 @@ export async function remove(id: number, actorSub: string) {
     oldValue: before as unknown as Record<string, unknown>,
   });
 
+  publish({ type: 'ticket.deleted', ticketId: id, actor: actorSub });
   return ticket;
 }
 

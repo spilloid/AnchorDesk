@@ -11,6 +11,11 @@ anchordesk is a **local-first ticketing system** built on Material UI design pri
 > **As of 1.1.0:** the database is **PostgreSQL** (was MariaDB) — chosen for `jsonb`, full-text search, and partial indexes. Auth is first-class: **local accounts + OIDC + SAML** with **server-side sessions**, **TOTP MFA (on by default)**, and **RBAC** (admin/technician/readonly). A **Network** view renders probe-discovered devices as a radial map.
 >
 > **As of 1.6.0:** tickets are a two-way **email conversation** — HTML compose (sanitized) with RFC 5322 threading so replies stay on the ticket; inbound IMAP mail keeps its HTML. The ticket list is **server-paginated** (`GET /tickets` returns `{ items, total, page, pageSize }`, not a bare array) with server-side search/filter and a virtualized table. **Probes link to companies** via `Probe.companyId`, which flows onto discovered devices. Time entries support **duration or start/stop**. MCP gained `log_time` + `send_ticket_email`.
+>
+> **As of 1.7.0 ("Close the loop"):** three additions complete the daily helpdesk loop.
+> - **Attachments** — a pluggable storage seam (`AttachmentStorage` Strategy: `LocalDiskStorage` + `S3Storage` for any S3-compatible store — AWS, MinIO, R2, B2) holds bytes; Postgres holds `Attachment` metadata. Configured via env **or** Admin → Integrations `storage` row (DB wins). Inbound IMAP attachments are persisted; the email composer can attach files. Upload is `@fastify/multipart`; download streams from the row's recorded backend.
+> - **Live layer (WebSockets)** — an in-process `eventBus` (Observer, alongside the audit log) publishes `ticket.*` / `note.added` / `sla.atRisk`; `wsHub` fans them over `@fastify/websocket` at `/ws` (session-authed on the upgrade). The web client live-updates lists/Kanban/open ticket and shows a notification bell.
+> - **Notifications + SLA** — `notificationService` turns events into per-user `Notification` rows (pushed live). `SlaPolicy` sets response/resolution targets matched by priority/company (precedence: company+priority > company > priority > default); tickets carry `responseDueAt` / `resolutionDueAt` / `firstRespondedAt`, and `slaScheduler` emits at-risk/breach events. Reactive SLA chips render on list/card/board/ticket.
 
 Key design goals:
 - Excellent standalone ticketing experience first

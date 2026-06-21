@@ -17,6 +17,8 @@ import { prisma } from '../db/prisma';
 import * as mailboxRepo from '../repositories/mailboxRepository';
 import * as ticketRepo from '../repositories/ticketRepository';
 import * as noteRepo from '../repositories/noteRepository';
+import * as attachmentRepo from '../repositories/attachmentRepository';
+import { currentStorage, buildKey } from './storage';
 import { sanitizeEmailHtml } from './mail/sanitizeHtml';
 
 export interface PollResult {
@@ -81,7 +83,8 @@ async function ingest(parsed: ParsedMail, mb: Mailbox, uid: number): Promise<'cr
   }
 
   if (ticketId) {
-    await noteRepo.create(ticketId, emailNote, 'imap');
+    const note = await noteRepo.create(ticketId, emailNote, 'imap');
+    await saveInboundAttachments(ticketId, note.id, parsed);
     return 'appended';
   }
 
@@ -97,8 +100,46 @@ async function ingest(parsed: ParsedMail, mb: Mailbox, uid: number): Promise<'cr
     },
     'imap'
   );
-  await noteRepo.create(ticket.id, emailNote, 'imap');
+  const note = await noteRepo.create(ticket.id, emailNote, 'imap');
+  await saveInboundAttachments(ticket.id, note.id, parsed);
   return 'created';
+}
+
+/**
+ * Persist a parsed email's attachments into the configured storage backend and
+ * link each to the ticket + the email note. Inline images (cid: parts) are
+ * skipped — they belong to the HTML body, not the file list. Failures are logged
+ * per-file so one bad attachment doesn't abort ticket ingest.
+ */
+async function saveInboundAttachments(ticketId: number, noteId: number, parsed: ParsedMail): Promise<void> {
+  const files = (parsed.attachments ?? []).filter(
+    (a) => a.content && (a.contentDisposition === 'attachment' || !a.related),
+  );
+  if (!files.length) return;
+  const storage = await currentStorage();
+  for (const file of files) {
+    const filename = file.filename || `attachment-${file.checksum?.slice(0, 8) || 'file'}`;
+    try {
+      const key = buildKey(ticketId, filename);
+      const contentType = file.contentType || 'application/octet-stream';
+      await storage.put(key, file.content, contentType);
+      await attachmentRepo.create(
+        {
+          ticketId,
+          noteId,
+          filename,
+          contentType,
+          size: file.size ?? file.content.length,
+          storageBackend: storage.backend,
+          storageKey: key,
+          createdBy: 'imap',
+        },
+        'imap',
+      );
+    } catch {
+      /* skip a single failed attachment; the ticket/note already exist */
+    }
+  }
 }
 
 /** Poll one mailbox for new mail. Connection errors are captured, not thrown. */

@@ -11,7 +11,7 @@
 import { prisma } from '../db/prisma';
 import { config } from '../config/config';
 
-export type IntegrationKey = 'smtp' | 'connectwise' | 'tactical';
+export type IntegrationKey = 'smtp' | 'connectwise' | 'tactical' | 'storage';
 
 export interface SmtpConfig {
   host: string;
@@ -32,12 +32,23 @@ export interface TacticalConfig {
   apiUrl: string;
   apiKey: string;
 }
+export interface StorageConfig {
+  backend: 'local' | 's3';
+  localDir: string;
+  s3Endpoint: string;
+  s3Region: string;
+  s3Bucket: string;
+  s3AccessKeyId: string;
+  s3SecretAccessKey: string;
+  s3ForcePathStyle: boolean;
+}
 
 // Which fields are secret per integration (omitted from public views).
 const SECRET_FIELDS: Record<IntegrationKey, string[]> = {
   smtp: ['pass'],
   connectwise: ['privateKey', 'clientId'],
   tactical: ['apiKey'],
+  storage: ['s3SecretAccessKey'],
 };
 
 function envDefaults(key: IntegrationKey): Record<string, unknown> {
@@ -48,6 +59,8 @@ function envDefaults(key: IntegrationKey): Record<string, unknown> {
       return { ...config.cwm };
     case 'tactical':
       return { apiUrl: config.trmm.apiUrl, apiKey: config.trmm.apiKey };
+    case 'storage':
+      return { ...config.storage };
   }
 }
 
@@ -63,7 +76,7 @@ async function load(key: IntegrationKey): Promise<Record<string, unknown>> {
 
 /** Seed any missing integration rows from env (first boot). */
 export async function seedSettings(): Promise<void> {
-  for (const key of ['smtp', 'connectwise', 'tactical'] as IntegrationKey[]) {
+  for (const key of ['smtp', 'connectwise', 'tactical', 'storage'] as IntegrationKey[]) {
     const existing = await prisma.setting.findUnique({ where: { key } });
     if (!existing) {
       await prisma.setting.create({ data: { key, value: envDefaults(key) as object } });
@@ -116,6 +129,21 @@ export async function getConnectwise(): Promise<ConnectwiseConfig> {
 export async function getTactical(): Promise<TacticalConfig> {
   const v = await load('tactical');
   return { apiUrl: String(v.apiUrl ?? ''), apiKey: String(v.apiKey ?? '') };
+}
+
+export async function getStorage(): Promise<StorageConfig> {
+  const v = await load('storage');
+  const backend = v.backend === 's3' ? 's3' : 'local';
+  return {
+    backend,
+    localDir: String(v.localDir ?? './data/attachments'),
+    s3Endpoint: String(v.s3Endpoint ?? ''),
+    s3Region: String(v.s3Region ?? 'us-east-1'),
+    s3Bucket: String(v.s3Bucket ?? ''),
+    s3AccessKeyId: String(v.s3AccessKeyId ?? ''),
+    s3SecretAccessKey: String(v.s3SecretAccessKey ?? ''),
+    s3ForcePathStyle: Boolean(v.s3ForcePathStyle ?? false),
+  };
 }
 
 /** Merge a partial update; blank secret fields are dropped (keep existing). */

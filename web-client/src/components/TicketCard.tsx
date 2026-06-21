@@ -4,6 +4,7 @@ import BusinessIcon from "@mui/icons-material/Business";
 import PersonIcon from "@mui/icons-material/Person";
 import { Ticket } from "../interfaces";
 import { statusColor, priorityColor } from "../ticketVocab";
+import SlaChip from "./SlaChip";
 
 interface TicketCardProps {
   ticket: Ticket;
@@ -24,6 +25,12 @@ const TicketCard: React.FC<TicketCardProps> = ({ ticket, onClick, shortenedSumma
           <Stack direction="row" spacing={1} sx={{ mb: 1 }} flexWrap="wrap" useFlexGap>
             <Chip size="small" label={ticket.status} color={statusColor(ticket.status)} />
             <Chip size="small" variant="outlined" label={ticket.priority || "Medium"} color={priorityColor(ticket.priority || "Medium")} />
+            <SlaChip
+              responseDueAt={ticket.responseDueAt}
+              resolutionDueAt={ticket.resolutionDueAt}
+              firstRespondedAt={ticket.firstRespondedAt}
+              status={ticket.status}
+            />
           </Stack>
 
           <Typography variant="subtitle1" sx={{ fontWeight: 600, lineHeight: 1.3 }} gutterBottom>
