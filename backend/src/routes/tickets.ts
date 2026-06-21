@@ -3,6 +3,7 @@ import * as ticketRepo from '../repositories/ticketRepository';
 import * as noteRepo from '../repositories/noteRepository';
 import * as audit from '../repositories/auditRepository';
 import { renderTicketHtml } from '../services/ticketExport';
+import { parseId } from '../util/ids';
 
 interface IdParam { id: string }
 interface NoteIdParam { id: string; noteId: string }
@@ -37,7 +38,9 @@ export async function ticketRoutes(server: FastifyInstance) {
 
   // Get a single ticket with notes
   server.get('/tickets/:id', async (req: FastifyRequest<{ Params: IdParam }>, reply: FastifyReply) => {
-    const ticket = await ticketRepo.getById(parseInt(req.params.id));
+    const id = parseId(req.params.id);
+    if (id === null) return reply.status(400).send({ error: 'invalid ticket id' });
+    const ticket = await ticketRepo.getById(id);
     if (!ticket) return reply.status(404).send({ error: 'Ticket not found' });
     return reply.send(ticket);
   });
@@ -53,8 +56,10 @@ export async function ticketRoutes(server: FastifyInstance) {
 
   // Update ticket fields
   server.patch('/tickets/:id', async (req: FastifyRequest<{ Params: IdParam }>, reply: FastifyReply) => {
+    const id = parseId(req.params.id);
+    if (id === null) return reply.status(400).send({ error: 'invalid ticket id' });
     const ticket = await ticketRepo.update(
-      parseInt(req.params.id),
+      id,
       req.body as ticketRepo.UpdateTicketInput,
       req.actorSub
     );
@@ -64,7 +69,9 @@ export async function ticketRoutes(server: FastifyInstance) {
 
   // Soft-delete ticket
   server.delete('/tickets/:id', async (req: FastifyRequest<{ Params: IdParam }>, reply: FastifyReply) => {
-    const ticket = await ticketRepo.remove(parseInt(req.params.id), req.actorSub);
+    const id = parseId(req.params.id);
+    if (id === null) return reply.status(400).send({ error: 'invalid ticket id' });
+    const ticket = await ticketRepo.remove(id, req.actorSub);
     if (!ticket) return reply.status(404).send({ error: 'Ticket not found' });
     return reply.status(204).send();
   });
@@ -72,30 +79,38 @@ export async function ticketRoutes(server: FastifyInstance) {
   // Printable, self-contained HTML export of the ticket (activity + inline
   // attachments). Served inline so the browser can render + "Print → Save as PDF".
   server.get('/tickets/:id/export', async (req: FastifyRequest<{ Params: IdParam }>, reply: FastifyReply) => {
-    const html = await renderTicketHtml(parseInt(req.params.id));
+    const id = parseId(req.params.id);
+    if (id === null) return reply.status(400).send({ error: 'invalid ticket id' });
+    const html = await renderTicketHtml(id);
     if (!html) return reply.status(404).send({ error: 'Ticket not found' });
     return reply.type('text/html').send(html);
   });
 
   // Ticket revision history
   server.get('/tickets/:id/history', async (req: FastifyRequest<{ Params: IdParam }>, reply: FastifyReply) => {
-    const history = await audit.getHistory('ticket', parseInt(req.params.id));
+    const id = parseId(req.params.id);
+    if (id === null) return reply.status(400).send({ error: 'invalid ticket id' });
+    const history = await audit.getHistory('ticket', id);
     return reply.send(history);
   });
 
   // List notes for a ticket
   server.get('/tickets/:id/notes', async (req: FastifyRequest<{ Params: IdParam }>, reply: FastifyReply) => {
-    const notes = await noteRepo.listForTicket(parseInt(req.params.id));
+    const id = parseId(req.params.id);
+    if (id === null) return reply.status(400).send({ error: 'invalid ticket id' });
+    const notes = await noteRepo.listForTicket(id);
     return reply.send(notes);
   });
 
   // Add a note to a ticket
   server.post('/tickets/:id/notes', async (req: FastifyRequest<{ Params: IdParam }>, reply: FastifyReply) => {
+    const id = parseId(req.params.id);
+    if (id === null) return reply.status(400).send({ error: 'invalid ticket id' });
     const body = req.body as noteRepo.CreateNoteInput;
     if (!body?.content) return reply.status(400).send({ error: 'content is required' });
 
     const note = await noteRepo.create(
-      parseInt(req.params.id),
+      id,
       { ...body, author: body.author ?? req.user?.displayName ?? req.actorSub },
       req.actorSub
     );
@@ -104,8 +119,12 @@ export async function ticketRoutes(server: FastifyInstance) {
 
   // Update a note
   server.patch('/tickets/:id/notes/:noteId', async (req: FastifyRequest<{ Params: NoteIdParam }>, reply: FastifyReply) => {
+    const ticketId = parseId(req.params.id);
+    const noteId = parseId(req.params.noteId);
+    if (ticketId === null) return reply.status(400).send({ error: 'invalid ticket id' });
+    if (noteId === null) return reply.status(400).send({ error: 'invalid note id' });
     const note = await noteRepo.update(
-      parseInt(req.params.noteId),
+      noteId,
       req.body as noteRepo.UpdateNoteInput,
       req.actorSub
     );
@@ -115,7 +134,11 @@ export async function ticketRoutes(server: FastifyInstance) {
 
   // Delete a note
   server.delete('/tickets/:id/notes/:noteId', async (req: FastifyRequest<{ Params: NoteIdParam }>, reply: FastifyReply) => {
-    const note = await noteRepo.remove(parseInt(req.params.noteId), req.actorSub);
+    const ticketId = parseId(req.params.id);
+    const noteId = parseId(req.params.noteId);
+    if (ticketId === null) return reply.status(400).send({ error: 'invalid ticket id' });
+    if (noteId === null) return reply.status(400).send({ error: 'invalid note id' });
+    const note = await noteRepo.remove(noteId, req.actorSub);
     if (!note) return reply.status(404).send({ error: 'Note not found' });
     return reply.status(204).send();
   });
@@ -123,7 +146,9 @@ export async function ticketRoutes(server: FastifyInstance) {
   // ─── Time tracking ───────────────────────────────────────────────────────────
   // Total logged minutes for a ticket.
   server.get('/tickets/:id/time', async (req: FastifyRequest<{ Params: IdParam }>, reply: FastifyReply) => {
-    const minutes = await noteRepo.timeTotalForTicket(parseInt(req.params.id));
+    const id = parseId(req.params.id);
+    if (id === null) return reply.status(400).send({ error: 'invalid ticket id' });
+    const minutes = await noteRepo.timeTotalForTicket(id);
     return reply.send({ minutes });
   });
 
@@ -133,6 +158,8 @@ export async function ticketRoutes(server: FastifyInstance) {
   //  - start/stop: pass `start` + `stop` ISO timestamps; minutes is derived and
   //    the raw window is preserved in timeStart/timeStop.
   server.post('/tickets/:id/time', async (req: FastifyRequest<{ Params: IdParam }>, reply: FastifyReply) => {
+    const id = parseId(req.params.id);
+    if (id === null) return reply.status(400).send({ error: 'invalid ticket id' });
     const body = (req.body ?? {}) as { minutes?: number; note?: string; start?: string; stop?: string };
 
     let minutes = Math.round(Number(body.minutes));
@@ -154,7 +181,7 @@ export async function ticketRoutes(server: FastifyInstance) {
     const author = req.user?.displayName ?? req.actorSub;
     const content = body.note?.trim() || `Logged ${minutes} min`;
     const note = await noteRepo.create(
-      parseInt(req.params.id),
+      id,
       { content, author, authorId: req.user?.id || undefined, noteType: 'time_entry', minutes, timeStart, timeStop },
       req.actorSub
     );

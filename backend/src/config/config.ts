@@ -2,6 +2,11 @@ import dotenv from 'dotenv';
 
 dotenv.config();
 
+function ticketNumberDigits(value: string | undefined): number {
+  const parsed = Number(value ?? 5);
+  return Number.isFinite(parsed) ? Math.min(6, Math.max(4, Math.trunc(parsed))) : 5;
+}
+
 export const config = {
   serverPort: process.env.SERVER_PORT || 8060,
 
@@ -14,6 +19,12 @@ export const config = {
 
   // Public base URL of the app — used to build OIDC/SAML callback URLs.
   appBaseUrl: (process.env.APP_BASE_URL || 'http://localhost:5173').replace(/\/$/, ''),
+
+  // Human-friendly ticket numbers. Locally-created tickets draw from a Postgres
+  // sequence starting at 10^(digits-1) (5 → 10000). Env seeds the `tickets`
+  // settings row on first boot; the DB row wins and is editable in Admin.
+  // Clamped to 4–6 to keep numbers intuitive.
+  ticketNumberDigits: ticketNumberDigits(process.env.TICKET_NUMBER_DIGITS),
 
   // Session cookie signing secret. Required in production; a dev fallback is
   // used when unset so local dev works out of the box (sessions reset on boot).

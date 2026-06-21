@@ -184,7 +184,9 @@ model Ticket {
   assignee         String?      @db.VarChar(100)
   assigneeId       Int?         @map("assignee_id")
   source           TicketSource @default(local)
-  externalId       String?      @map("external_id") @db.VarChar(100)
+  // external_id holds the RFC 5322 Message-ID for imap-sourced tickets, which
+  // can exceed 100 chars — keep at 255 so long Message-IDs don't overflow.
+  externalId       String?      @map("external_id") @db.VarChar(255)
   externalProvider String?      @map("external_provider") @db.VarChar(50)
   // SLA tracking. The resolved policy (slaPolicyId) yields response/resolution
   // deadlines, recomputed when priority or company changes. firstRespondedAt is
@@ -228,7 +230,7 @@ model Note {
   // Canonical billable duration for time_entry notes (minutes). Lets users log
   // "30m" directly without start/stop; totals sum this field.
   minutes    Int?
-  externalId String?   @map("external_id") @db.VarChar(100)
+  externalId String?   @map("external_id") @db.VarChar(255)
   // Email correspondence metadata (noteType = email). `content` holds the plain-text
   // body (search/preview); `htmlContent` holds the sanitized HTML rendered in the
   // conversation view. `direction` is "inbound" | "outbound". `inReplyTo` is the
@@ -240,7 +242,7 @@ model Note {
   emailCc     String?  @map("email_cc") @db.Text
   emailBcc    String?  @map("email_bcc") @db.Text
   subject     String?  @db.VarChar(255)
-  inReplyTo   String?  @map("in_reply_to") @db.VarChar(100)
+  inReplyTo   String?  @map("in_reply_to") @db.VarChar(255)
   createdAt  DateTime  @default(now()) @map("created_at")
   updatedAt  DateTime  @updatedAt @map("updated_at")
 
@@ -407,7 +409,7 @@ model SyncProvider {
 model SyncLog {
   id         BigInt        @id @default(autoincrement())
   providerId Int           @map("provider_id")
-  externalId String?       @map("external_id") @db.VarChar(100)
+  externalId String?       @map("external_id") @db.VarChar(255)
   internalId Int?          @map("internal_id")
   direction  SyncDirection
   status     SyncStatus
@@ -439,7 +441,7 @@ model Device {
   companyId        Int?         @map("company_id")
   source           DeviceSource @default(local)
   probeId          Int?         @map("probe_id")
-  externalId       String?      @map("external_id") @db.VarChar(100)
+  externalId       String?      @map("external_id") @db.VarChar(255)
   externalProvider String?      @map("external_provider") @db.VarChar(50)
   metadata         Json?
   firstSeenAt      DateTime?    @map("first_seen_at")

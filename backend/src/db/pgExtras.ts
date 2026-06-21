@@ -8,6 +8,7 @@
  */
 import { FastifyBaseLogger } from 'fastify';
 import { prisma } from './prisma';
+import { config } from '../config/config';
 
 // to_tsvector expression used by both the index and the search query — they MUST
 // match exactly for Postgres to use the index.
@@ -31,6 +32,11 @@ const STATEMENTS = [
   `CREATE INDEX IF NOT EXISTS idx_tickets_active ON tickets (company_name, status, created_at DESC) WHERE status <> 'Deleted'`,
   // Device map / Network view groups by company; partial-skip orphans.
   `CREATE INDEX IF NOT EXISTS idx_devices_company_status ON devices (company_name, status) WHERE company_name IS NOT NULL`,
+  // Human-friendly ticket numbers: a dedicated sequence so numbers are monotonic
+  // and independent of the internal autoincrement id. START = 10^(digits-1) so a
+  // 5-digit config begins at 10000. IF NOT EXISTS means the start is fixed at
+  // first creation; later changing the digit setting only affects zero-padding.
+  `CREATE SEQUENCE IF NOT EXISTS ticket_number_seq AS bigint START WITH ${10 ** (config.ticketNumberDigits - 1)} MINVALUE ${10 ** (config.ticketNumberDigits - 1)}`,
 ];
 
 export async function ensurePgExtras(log: FastifyBaseLogger): Promise<void> {

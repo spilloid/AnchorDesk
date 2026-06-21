@@ -27,7 +27,7 @@ import { readToBuffer } from '../storage';
 import { mailTransport } from './SmtpMailTransport';
 import { OutboundAttachment } from './MailTransport';
 import { sanitizeEmailHtml, htmlToText } from './sanitizeHtml';
-import { buildReferenceChain, generateMessageId } from './threading';
+import { buildReferenceChain, generateMessageId, tagSubjectWithTicket } from './threading';
 
 export interface SendTicketEmailInput {
   to: string | string[];
@@ -123,6 +123,9 @@ export async function sendTicketEmail(ticketId: number, input: SendTicketEmailIn
   const thread = await buildThread(ticketId, ticket.externalId ?? null);
   const messageId = generateMessageId(from?.address ?? smtp.from);
   const replyTo = (await resolveReplyTo(ticket.companyName ?? null)) ?? undefined;
+  // Carry the ticket number in the subject so a customer reply re-threads onto
+  // this ticket even if References/In-Reply-To are stripped en route.
+  const subject = tagSubjectWithTicket(input.subject, ticket.ticketNumber);
 
   // Pull bytes for any ticket attachments the composer selected, scoped to this
   // ticket so a caller can't exfiltrate another ticket's files by id.
@@ -146,7 +149,7 @@ export async function sendTicketEmail(ticketId: number, input: SendTicketEmailIn
     cc: input.cc,
     bcc: input.bcc,
     from,
-    subject: input.subject,
+    subject,
     text,
     html: embedded.html ?? html,
     replyTo,
@@ -173,7 +176,7 @@ export async function sendTicketEmail(ticketId: number, input: SendTicketEmailIn
       emailTo: toStr,
       emailCc: input.cc?.join(', '),
       emailBcc: input.bcc?.join(', '),
-      subject: input.subject,
+      subject,
       externalId: storedId,
       inReplyTo: thread.inReplyTo,
     },

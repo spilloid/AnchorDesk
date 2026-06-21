@@ -22,7 +22,15 @@
 
 What sets it apart from a plain helpdesk: each ticket can become an operations cockpit. Link the **devices** involved, inspect their source and status, run Tactical RMM scripts, send email, and keep the resulting activity on the ticket. Core changes are recorded in an **append-only audit log** with actor and before/after data.
 
-## What ships in v1.8.0
+## What ships in v1.9.0
+
+- **🔢 Human-friendly ticket numbers** — local tickets receive configurable 4–6 digit public numbers independent of database IDs. Cards, tables, Kanban, dialogs, search, email subjects, and exports consistently display the public number.
+- **🧵 Resilient email threading** — outbound subjects carry `[#NNNNN]`; inbound IMAP uses that token as a fallback when mail relays strip `References` or `In-Reply-To`. Message-ID fields are widened and bounded writes are clamped against malformed external input.
+- **🔄 Sync provider management** — create, enable, run, and delete ConnectWise ticket providers from the Sync view, with consistent provider badges across ticket surfaces.
+- **📡 Live Tactical data** — opening a ticket fetches current Tactical RMM details for linked agents, including online state, IPs, OS, site, hardware, and last-seen time.
+- **🛡️ Safer routing and deployment** — malformed ticket/note IDs return clean 400 responses; integration settings seed from environment variables; production secrets can be managed with SOPS.
+
+The core platform also includes:
 
 - **✉️ Multi-identity email** — send as shared boxes (help@, support@) or a personal alias on your SMTP domain, with **Cc/Bcc**, contact **autocomplete**, per-tech **signatures**, reusable **boilerplate templates**, and paste/drop **inline images**. The From header uses the chosen identity while the SMTP envelope stays your relay so SPF/DKIM still pass. <sub>(Your relay must allow sending as the chosen From address — normal for same-domain aliases; if it enforces sender = auth-user it will reject and AnchorDesk surfaces a clear error.)</sub>
 - **🏷️ Labels & mailbox tagging** — managed, colored labels on tickets; each IMAP mailbox can auto-apply a label so catchall vs help@ vs a personal inbox arrive tagged differently.
@@ -117,8 +125,8 @@ Open **http://localhost:5173** — `/api/*`, `/probe/*`, and `/mcp/*` are proxie
 
 For the complete Compose stack, run `docker compose up --build`. Tagged release images are published as:
 
-- `ghcr.io/spilloid/anchordesk-backend:1.8.0`
-- `ghcr.io/spilloid/anchordesk-web-client:1.8.0`
+- `ghcr.io/spilloid/anchordesk-backend:1.9.0`
+- `ghcr.io/spilloid/anchordesk-web-client:1.9.0`
 
 ## Configuration
 
@@ -138,6 +146,7 @@ See [backend/.env.example](backend/.env.example) for the complete backend config
 | `CWM_*` | Optional | Seeds ConnectWise Manage credentials |
 | `TRMM_*` | Optional | Seeds Tactical RMM device sync and script runner credentials |
 | `SMTP_*` | Optional | Seeds outbound SMTP settings; IMAP mailboxes are created in Admin → Mailboxes |
+| `TICKET_NUMBER_DIGITS` | Optional | Public ticket-number width, 4–6 (default 5) |
 
 Auth methods can be configured after first boot from **Admin → Authentication**. SMTP, ConnectWise, and Tactical RMM can be managed from **Admin → Integrations**. Secrets are write-only in API responses.
 

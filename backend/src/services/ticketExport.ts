@@ -32,6 +32,7 @@ export async function renderTicketHtml(ticketId: number): Promise<string | null>
     },
   });
   if (!ticket) return null;
+  const ticketNumber = ticket.ticketNumber ?? String(ticket.id);
 
   // Inline image attachments as data URIs so the export is self-contained.
   const dataUris = new Map<number, string>();
@@ -77,7 +78,7 @@ export async function renderTicketHtml(ticketId: number): Promise<string | null>
 
   return `<!DOCTYPE html>
 <html lang="en"><head><meta charset="utf-8">
-<title>Ticket #${ticket.id} — ${esc(ticket.title)}</title>
+<title>Ticket #${esc(ticketNumber)} — ${esc(ticket.title)}</title>
 <style>
   body { font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; color: #1c1b1f; margin: 0; padding: 32px; max-width: 900px; }
   h1 { font-size: 22px; margin: 0 0 4px; }
@@ -99,7 +100,7 @@ export async function renderTicketHtml(ticketId: number): Promise<string | null>
 </style></head>
 <body>
   <div class="no-print"><button onclick="window.print()">Print / Save as PDF</button></div>
-  <h1>#${ticket.id} — ${esc(ticket.title)}</h1>
+  <h1>#${esc(ticketNumber)} — ${esc(ticket.title)}</h1>
   <div class="sub">${esc(ticket.company?.name ?? ticket.companyName ?? 'No company')} ${labelChips}</div>
   <div class="grid">
     <div>Status</div><div>${esc(ticket.status)}</div>

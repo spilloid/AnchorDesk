@@ -5,6 +5,7 @@ import PersonIcon from "@mui/icons-material/Person";
 import { Ticket } from "../interfaces";
 import { statusColor, priorityColor } from "../ticketVocab";
 import SlaChip from "./SlaChip";
+import SyncBadges from "./SyncBadges";
 
 interface TicketCardProps {
   ticket: Ticket;
@@ -31,6 +32,7 @@ const TicketCard: React.FC<TicketCardProps> = ({ ticket, onClick, shortenedSumma
               firstRespondedAt={ticket.firstRespondedAt}
               status={ticket.status}
             />
+            <SyncBadges ticket={ticket} />
             {(ticket.labels ?? []).map((tl) => (
               <Chip key={tl.label.id} size="small" label={tl.label.name}
                 sx={{ bgcolor: tl.label.color, color: "#fff", height: 22 }} />

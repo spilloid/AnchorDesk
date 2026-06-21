@@ -58,9 +58,9 @@ const KanbanBoard: React.FC<KanbanBoardProps> = ({
                 </Typography>
                 {ticketsByStatus[status]?.map((ticket, index) => (
                   <Draggable
-                    draggableId={ticket.ticketnumber.toString()}
+                    draggableId={String(ticket.localId ?? ticket.ticketnumber)}
                     index={index}
-                    key={ticket.ticketnumber}
+                    key={ticket.localId ?? ticket.ticketnumber}
                   >
                     {(provided) => (
                       <Box

@@ -44,6 +44,7 @@ import NotesSection from "./NotesSection";
 import RichTextEditor from "./RichTextEditor";
 import RunScriptDialog from "./RunScriptDialog";
 import SlaChip from "./SlaChip";
+import SyncBadges from "./SyncBadges";
 import * as api from "../api/client";
 import { TICKET_STATUSES, TICKET_PRIORITIES, statusColor } from "../ticketVocab";
 
@@ -90,6 +91,9 @@ const TicketDialog: React.FC<TicketDialogProps> = ({ ticket, open, onClose, note
   const [timeEntries, setTimeEntries] = useState<any[]>([]);
   const [attachments, setAttachments] = useState<api.Attachment[]>([]);
   const [allLabels, setAllLabels] = useState<api.Label[]>([]);
+  const [liveDevices, setLiveDevices] = useState<
+    Record<number, { loading: boolean; data?: api.TacticalLiveData; error?: string }>
+  >({});
 
   const reloadAttachments = useCallback(() => {
     if (ticket.localId == null) return;
@@ -110,10 +114,32 @@ const TicketDialog: React.FC<TicketDialogProps> = ({ ticket, open, onClose, note
     await api.untagTicket(ticket.localId, labelId).then(reloadFull).catch(() => {});
   };
 
+  const loadDeviceLive = useCallback(async (deviceId: number) => {
+    setLiveDevices((prev) => ({ ...prev, [deviceId]: { loading: true } }));
+    try {
+      const data = await api.getDeviceLive(deviceId);
+      setLiveDevices((prev) => ({ ...prev, [deviceId]: { loading: false, data } }));
+    } catch (err) {
+      setLiveDevices((prev) => ({
+        ...prev,
+        [deviceId]: { loading: false, error: (err as Error).message },
+      }));
+    }
+  }, []);
+
   const reloadDevices = useCallback(() => {
     if (ticket.localId == null) return;
-    api.listTicketDevices(ticket.localId).then((d) => setDevices(d as any[])).catch(() => setDevices([]));
-  }, [ticket.localId]);
+    api.listTicketDevices(ticket.localId).then((d) => {
+      const next = d as any[];
+      setDevices(next);
+      const tacticalDevices = next.filter((device) => device.source === "tactical_rmm" && device.externalId);
+      setLiveDevices({});
+      tacticalDevices.forEach((device) => loadDeviceLive(device.id));
+    }).catch(() => {
+      setDevices([]);
+      setLiveDevices({});
+    });
+  }, [ticket.localId, loadDeviceLive]);
 
   const reloadTime = useCallback(() => {
     if (ticket.localId == null) return;
@@ -253,7 +279,14 @@ const TicketDialog: React.FC<TicketDialogProps> = ({ ticket, open, onClose, note
               <Chip size="small" label={`#${ticket.ticketnumber}`} sx={{ bgcolor: "rgba(255,255,255,0.2)", color: "#fff", fontWeight: 700 }} />
               <Chip size="small" label={status} color={statusColor(status)} />
               <Chip size="small" variant="outlined" label={priority || "Medium"} sx={{ color: "#fff", borderColor: "rgba(255,255,255,0.5)" }} />
-              {source !== "local" && <Chip size="small" icon={<SyncIcon sx={{ color: "#fff !important" }} />} label={externalProvider ?? source} sx={{ bgcolor: "rgba(255,255,255,0.18)", color: "#fff" }} />}
+              <SyncBadges
+                ticket={{
+                  source,
+                  externalProvider,
+                  externalId: full?.externalId ? String(full.externalId) : ticket.externalId,
+                }}
+                header
+              />
               <SlaChip
                 responseDueAt={full?.responseDueAt}
                 resolutionDueAt={full?.resolutionDueAt}
@@ -413,22 +446,32 @@ const TicketDialog: React.FC<TicketDialogProps> = ({ ticket, open, onClose, note
                     {devices.map((d) => {
                       const canRun = !!d.externalId && d.source !== "local" && d.source !== "netviz";
                       return (
-                        <Stack key={d.id} direction="row" alignItems="center" spacing={1}>
-                          <ComputerIcon fontSize="small" color={d.status === "online" ? "success" : "disabled"} />
-                          <Box sx={{ minWidth: 0, flexGrow: 1 }}>
-                            <Typography variant="body2" noWrap>{d.displayName || d.hostname || d.ipAddress || "device"}</Typography>
-                            {d.ipAddress && <Typography variant="caption" color="text.secondary">{d.ipAddress}</Typography>}
-                          </Box>
-                          <Chip size="small" variant="outlined" label={sourceLabel(d.source)} color={sourceColor(d.source)} />
-                          {canRun && (
-                            <Tooltip title="Run script">
-                              <IconButton size="small" onClick={() => setScriptDevice(d)}><TerminalIcon fontSize="small" /></IconButton>
+                        <Box key={d.id}>
+                          <Stack direction="row" alignItems="center" spacing={1}>
+                            <ComputerIcon fontSize="small" color={d.status === "online" ? "success" : "disabled"} />
+                            <Box sx={{ minWidth: 0, flexGrow: 1 }}>
+                              <Typography variant="body2" noWrap>{d.displayName || d.hostname || d.ipAddress || "device"}</Typography>
+                              {d.ipAddress && <Typography variant="caption" color="text.secondary">{d.ipAddress}</Typography>}
+                            </Box>
+                            <Chip size="small" variant="outlined" label={sourceLabel(d.source)} color={sourceColor(d.source)} />
+                            {d.source === "tactical_rmm" && (
+                              <Tooltip title="Refresh live Tactical data">
+                                <IconButton size="small" onClick={() => loadDeviceLive(d.id)}><SyncIcon fontSize="small" /></IconButton>
+                              </Tooltip>
+                            )}
+                            {canRun && (
+                              <Tooltip title="Run script">
+                                <IconButton size="small" onClick={() => setScriptDevice(d)}><TerminalIcon fontSize="small" /></IconButton>
+                              </Tooltip>
+                            )}
+                            <Tooltip title="Unlink device">
+                              <IconButton size="small" onClick={() => unlinkDevice(d.id)}><Close fontSize="small" /></IconButton>
                             </Tooltip>
+                          </Stack>
+                          {d.source === "tactical_rmm" && (
+                            <TacticalLivePanel state={liveDevices[d.id]} />
                           )}
-                          <Tooltip title="Unlink device">
-                            <IconButton size="small" onClick={() => unlinkDevice(d.id)}><Close fontSize="small" /></IconButton>
-                          </Tooltip>
-                        </Stack>
+                        </Box>
                       );
                     })}
                   </Stack>
@@ -531,6 +574,53 @@ function sourceColor(s?: string): "primary" | "secondary" | "default" {
   if (s === "tactical_rmm") return "primary";
   if (s === "netviz") return "secondary";
   return "default";
+}
+
+function TacticalLivePanel({
+  state,
+}: {
+  state?: { loading: boolean; data?: api.TacticalLiveData; error?: string };
+}) {
+  if (!state || state.loading) {
+    return (
+      <Stack direction="row" alignItems="center" spacing={1} sx={{ ml: 4, mt: 0.75 }}>
+        <CircularProgress size={12} />
+        <Typography variant="caption" color="text.secondary">Loading live Tactical data…</Typography>
+      </Stack>
+    );
+  }
+  if (state.error) {
+    return <Alert severity="warning" sx={{ ml: 4, mt: 0.75, py: 0 }}>{state.error}</Alert>;
+  }
+  const live = state.data;
+  if (!live) return null;
+
+  const facts = [
+    ["Status", live.status],
+    ["OS", live.operatingSystem],
+    ["Local IP", live.localIps.join(", ")],
+    ["Public IP", live.publicIp],
+    ["Client / site", [live.clientName, live.siteName].filter(Boolean).join(" / ")],
+    ["Last seen", live.lastSeen ? new Date(live.lastSeen).toLocaleString() : null],
+    ["Hardware", live.makeModel],
+    ["CPU", live.cpuModel],
+  ].filter(([, value]) => value);
+
+  return (
+    <Box sx={{ ml: 4, mt: 0.75, p: 1, borderRadius: 1, bgcolor: "action.hover" }}>
+      <Grid container spacing={0.5}>
+        {facts.map(([label, value]) => (
+          <Grid item xs={12} sm={6} key={label}>
+            <Typography variant="caption" color="text.secondary">{label}: </Typography>
+            <Typography variant="caption">{value}</Typography>
+          </Grid>
+        ))}
+      </Grid>
+      <Typography variant="caption" color="text.disabled">
+        Live as of {new Date(live.fetchedAt).toLocaleTimeString()}
+      </Typography>
+    </Box>
+  );
 }
 
 function fmtMinutes(m: number): string {

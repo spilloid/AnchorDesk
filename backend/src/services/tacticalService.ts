@@ -73,7 +73,7 @@ export function listAgents(): Promise<TacticalAgent[]> {
 }
 
 export function getAgent(agentId: string): Promise<TacticalAgent> {
-  return trmm<TacticalAgent>(`/agents/${agentId}/`);
+  return trmm<TacticalAgent>(`/agents/${encodeURIComponent(agentId)}/`);
 }
 
 export function listScripts(): Promise<TacticalScript[]> {

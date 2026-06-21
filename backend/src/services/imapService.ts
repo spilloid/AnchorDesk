@@ -21,6 +21,8 @@ import * as attachmentRepo from '../repositories/attachmentRepository';
 import * as labelRepo from '../repositories/labelRepository';
 import { currentStorage, buildKey } from './storage';
 import { sanitizeEmailHtml } from './mail/sanitizeHtml';
+import { ticketNumberFromSubject } from './mail/threading';
+import { clamp } from '../util/strings';
 
 export interface PollResult {
   mailbox: string;
@@ -36,7 +38,7 @@ function refsOf(parsed: ParsedMail): string[] {
   if (parsed.references) {
     refs.push(...(Array.isArray(parsed.references) ? parsed.references : [parsed.references]));
   }
-  return refs.filter(Boolean);
+  return refs.filter(Boolean).map((id) => clamp(id, 255));
 }
 
 function bodyOf(parsed: ParsedMail): string {
@@ -46,7 +48,7 @@ function bodyOf(parsed: ParsedMail): string {
 }
 
 async function ingest(parsed: ParsedMail, mb: Mailbox, uid: number): Promise<'created' | 'appended'> {
-  const messageId = parsed.messageId || `<imap-${mb.id}-${uid}@local>`;
+  const messageId = clamp(parsed.messageId || `<imap-${mb.id}-${uid}@local>`, 255);
   const fromText = parsed.from?.text || 'unknown sender';
   const body = bodyOf(parsed);
   const subject = parsed.subject || '(no subject)';
@@ -68,6 +70,15 @@ async function ingest(parsed: ParsedMail, mb: Mailbox, uid: number): Promise<'cr
       ticketId = t?.id ?? null;
     }
   }
+  // Fallback threading: a `[#NNNNN]` token in the subject re-attaches a reply to
+  // its ticket even when References/In-Reply-To were stripped en route.
+  if (!ticketId) {
+    const num = ticketNumberFromSubject(subject);
+    if (num) {
+      const t = await ticketRepo.findByNumber(num);
+      ticketId = t?.id ?? null;
+    }
+  }
 
   let outcome: 'created' | 'appended';
   if (ticketId) {
@@ -75,8 +86,8 @@ async function ingest(parsed: ParsedMail, mb: Mailbox, uid: number): Promise<'cr
   } else {
     const ticket = await ticketRepo.create(
       {
-        title: subject.slice(0, 255),
-        summary: body.slice(0, 200),
+        title: clamp(subject, 255),
+        summary: clamp(body, 200),
         description: body,
         companyName: mb.companyName ?? undefined,
         source: 'imap',
@@ -110,7 +121,7 @@ async function ingest(parsed: ParsedMail, mb: Mailbox, uid: number): Promise<'cr
       emailTo: toText,
       subject,
       externalId: messageId,
-      inReplyTo: parsed.inReplyTo,
+      inReplyTo: clamp(parsed.inReplyTo, 255),
     },
     'imap'
   );

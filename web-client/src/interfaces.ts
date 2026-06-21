@@ -40,7 +40,8 @@ export interface Note {
 
 export interface Ticket {
   status: string;
-  ticketnumber: number;
+  /** Human-friendly public ticket number (distinct from the local database ID). */
+  ticketnumber: string;
   /** Local database row ID — use this for all API calls. */
   localId?: number;
   company: Company;
@@ -55,6 +56,9 @@ export interface Ticket {
   responseDueAt?: string | null;
   resolutionDueAt?: string | null;
   firstRespondedAt?: string | null;
+  source?: string;
+  externalProvider?: string;
+  externalId?: string;
   // Labels (1.8.0) — managed tags, e.g. which mailbox a ticket arrived on.
   labels?: { label: { id: number; name: string; color: string } }[];
 }

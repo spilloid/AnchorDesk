@@ -583,7 +583,7 @@ function IntegrationsPanel() {
   const { data, loading, error, reload } = useAsync(() => api.getIntegrations());
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
 
-  const save = async (key: "smtp" | "connectwise" | "tactical" | "storage", patch: Record<string, unknown>) => {
+  const save = async (key: "smtp" | "connectwise" | "tactical" | "storage" | "tickets", patch: Record<string, unknown>) => {
     setMsg(null);
     try {
       await api.updateIntegration(key, patch);
@@ -602,6 +602,15 @@ function IntegrationsPanel() {
       <Typography variant="h5">Integrations</Typography>
       {msg && <Alert severity={msg.ok ? "success" : "error"} onClose={() => setMsg(null)}>{msg.text}</Alert>}
       <Alert severity="info">Seeded from environment variables; edits here take effect immediately and override the env defaults. Secrets are write-only — leave blank to keep the current value.</Alert>
+
+      <IntegrationCard
+        title="Ticket numbering"
+        configured
+        fields={[
+          { k: "numberDigits", label: "Ticket number digits (4–6)", value: data.tickets.numberDigits ?? 5, type: "number" },
+        ]}
+        onSave={(patch) => save("tickets", patch)}
+      />
 
       <IntegrationCard
         title="SMTP (outbound email)"

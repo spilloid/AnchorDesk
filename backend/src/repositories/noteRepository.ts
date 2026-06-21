@@ -2,6 +2,7 @@ import { NoteType } from '@prisma/client';
 import { prisma } from '../db/prisma';
 import * as audit from './auditRepository';
 import { publish } from '../services/realtime/eventBus';
+import { clamp } from '../util/strings';
 
 export interface CreateNoteInput {
   content: string;
@@ -49,21 +50,23 @@ export async function create(ticketId: number, input: CreateNoteInput, actorSub:
     data: {
       ticketId,
       content: input.content,
-      author: input.author,
+      author: clamp(input.author, 150),
       authorId: input.authorId,
       noteType: input.noteType ?? 'note',
       timeStart: input.timeStart,
       timeStop: input.timeStop,
       minutes: input.minutes,
-      externalId: input.externalId,
+      // Clamp the bounded VarChar columns so a long Message-ID / subject from the
+      // wild can't overflow and 500 the insert (columns are 255/320; see schema).
+      externalId: clamp(input.externalId, 255),
       direction: input.direction,
       htmlContent: input.htmlContent,
-      emailFrom: input.emailFrom,
+      emailFrom: clamp(input.emailFrom, 320),
       emailTo: input.emailTo,
       emailCc: input.emailCc,
       emailBcc: input.emailBcc,
-      subject: input.subject,
-      inReplyTo: input.inReplyTo,
+      subject: clamp(input.subject, 255),
+      inReplyTo: clamp(input.inReplyTo, 255),
     },
   });
 

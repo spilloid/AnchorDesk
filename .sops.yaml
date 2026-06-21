@@ -1,0 +1,3 @@
+creation_rules:
+  - path_regex: .*integrations\.sops\.env$
+    age: age10j638zvagccuz299zj8n47cpwvxt5fuqtrkyvlsxucmf2ecst94shcecyh

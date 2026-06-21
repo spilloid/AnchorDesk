@@ -15,19 +15,20 @@ import {
   TableRow,
   Typography,
   Alert,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
+  IconButton,
+  MenuItem,
+  TextField,
 } from "@mui/material";
 import SyncIcon from "@mui/icons-material/Sync";
 import CheckCircleIcon from "@mui/icons-material/CheckCircle";
 import ErrorIcon from "@mui/icons-material/Error";
+import AddIcon from "@mui/icons-material/Add";
+import DeleteIcon from "@mui/icons-material/Delete";
 import * as api from "../api/client";
-
-interface SyncProvider {
-  id: number;
-  name: string;
-  type: string;
-  enabled: boolean;
-  lastSyncedAt: string | null;
-}
 
 interface SyncLogEntry {
   id: string;
@@ -52,18 +53,23 @@ interface Props {
   onTicketsChanged?: () => void;
 }
 
-export default function CWManageView({ onTicketsChanged }: Props) {
-  const [providers, setProviders] = useState<SyncProvider[]>([]);
+export default function SyncView({ onTicketsChanged }: Props) {
+  const [providers, setProviders] = useState<api.SyncProvider[]>([]);
   const [syncLog, setSyncLog] = useState<SyncLogEntry[]>([]);
   const [syncing, setSyncing] = useState<Record<string, boolean>>({});
   const [lastResults, setLastResults] = useState<SyncResult[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [createOpen, setCreateOpen] = useState(false);
+  const [newName, setNewName] = useState("");
+  const [newType, setNewType] = useState<"connectwise">("connectwise");
+  const [newBoard, setNewBoard] = useState("");
+  const [creating, setCreating] = useState(false);
 
   const loadProviders = useCallback(async () => {
     try {
       const data = await api.listSyncProviders();
-      setProviders(data as SyncProvider[]);
+      setProviders(data);
     } catch {
       setError("Could not load sync providers");
     }
@@ -100,10 +106,42 @@ export default function CWManageView({ onTicketsChanged }: Props) {
     }
   };
 
-  const handleToggleProvider = async (provider: SyncProvider) => {
+  const handleToggleProvider = async (provider: api.SyncProvider) => {
     try {
       await api.toggleSyncProvider(provider.id, !provider.enabled);
       await loadProviders();
+    } catch (err) {
+      setError((err as Error).message);
+    }
+  };
+
+  const handleCreateProvider = async () => {
+    if (!newName.trim()) return;
+    setCreating(true);
+    setError(null);
+    try {
+      await api.createSyncProvider({
+        name: newName.trim(),
+        type: newType,
+        config: newBoard.trim() ? { board: newBoard.trim() } : {},
+      });
+      setNewName("");
+      setNewBoard("");
+      setCreateOpen(false);
+      await loadProviders();
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setCreating(false);
+    }
+  };
+
+  const handleDeleteProvider = async (provider: api.SyncProvider) => {
+    if (!window.confirm(`Delete sync provider "${provider.name}" and its activity log?`)) return;
+    setError(null);
+    try {
+      await api.deleteSyncProvider(provider.id);
+      await Promise.all([loadProviders(), loadLog()]);
     } catch (err) {
       setError((err as Error).message);
     }
@@ -160,20 +198,25 @@ export default function CWManageView({ onTicketsChanged }: Props) {
           <Typography variant="subtitle1" fontWeight={600}>
             Configured Providers
           </Typography>
-          <Button
-            variant="contained"
-            startIcon={syncing["__all__"] ? <CircularProgress size={16} color="inherit" /> : <SyncIcon />}
-            onClick={() => handleSync()}
-            disabled={Object.values(syncing).some(Boolean) || providers.filter((p) => p.enabled).length === 0}
-          >
-            Sync All
-          </Button>
+          <Stack direction="row" spacing={1}>
+            <Button variant="outlined" startIcon={<AddIcon />} onClick={() => setCreateOpen(true)}>
+              Add provider
+            </Button>
+            <Button
+              variant="contained"
+              startIcon={syncing["__all__"] ? <CircularProgress size={16} color="inherit" /> : <SyncIcon />}
+              onClick={() => handleSync()}
+              disabled={Object.values(syncing).some(Boolean) || providers.filter((p) => p.enabled).length === 0}
+            >
+              Sync All
+            </Button>
+          </Stack>
         </Box>
         <Divider />
 
         {providers.length === 0 ? (
           <Typography sx={{ p: 2 }} color="text.secondary">
-            No sync providers configured. Insert a row into the <code>sync_providers</code> table to get started.
+            No sync providers configured. Add one here to get started.
           </Typography>
         ) : (
           <Table size="small">
@@ -221,6 +264,15 @@ export default function CWManageView({ onTicketsChanged }: Props) {
                     >
                       Sync Now
                     </Button>
+                    <IconButton
+                      size="small"
+                      color="error"
+                      aria-label={`Delete ${p.name}`}
+                      onClick={() => handleDeleteProvider(p)}
+                      disabled={Object.values(syncing).some(Boolean)}
+                    >
+                      <DeleteIcon fontSize="small" />
+                    </IconButton>
                   </TableCell>
                 </TableRow>
               ))}
@@ -300,6 +352,46 @@ export default function CWManageView({ onTicketsChanged }: Props) {
           </Table>
         )}
       </Paper>
+
+      <Dialog open={createOpen} onClose={() => !creating && setCreateOpen(false)} fullWidth maxWidth="sm">
+        <DialogTitle>Add sync provider</DialogTitle>
+        <DialogContent>
+          <Stack spacing={2} sx={{ mt: 1 }}>
+            <TextField
+              autoFocus
+              label="Provider name"
+              value={newName}
+              onChange={(e) => setNewName(e.target.value)}
+              placeholder="ConnectWise Support"
+            />
+            <TextField
+              select
+              label="Provider type"
+              value={newType}
+              onChange={(e) => setNewType(e.target.value as "connectwise")}
+            >
+              <MenuItem value="connectwise">ConnectWise Manage</MenuItem>
+            </TextField>
+            <TextField
+              label="Board name (optional)"
+              value={newBoard}
+              onChange={(e) => setNewBoard(e.target.value)}
+              helperText="Leave blank to use the adapter default. Credentials come from Admin → Integrations."
+            />
+          </Stack>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setCreateOpen(false)} disabled={creating}>Cancel</Button>
+          <Button
+            variant="contained"
+            onClick={handleCreateProvider}
+            disabled={creating || !newName.trim()}
+            startIcon={creating ? <CircularProgress size={16} color="inherit" /> : <AddIcon />}
+          >
+            Add provider
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 }

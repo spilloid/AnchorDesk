@@ -2,6 +2,7 @@ import * as React from "react";
 import { DataGrid, GridColDef } from "@mui/x-data-grid";
 import { Ticket } from "../interfaces";
 import SlaChip from "./SlaChip";
+import SyncBadges from "./SyncBadges";
 
 interface TicketTableProps {
   tickets: Ticket[];
@@ -21,7 +22,12 @@ const formatDate = (dateString: string | undefined) => {
 };
 
 const columns: GridColDef[] = [
-  { field: "ticketnumber", headerName: "Ticket #", width: 110 },
+  {
+    field: "ticketnumber",
+    headerName: "Ticket #",
+    width: 110,
+    renderCell: (params) => `#${params.value}`,
+  },
   { field: "ticketTitle", headerName: "Title", flex: 1, minWidth: 240 },
   { field: "status", headerName: "Status", width: 130 },
   { field: "priority", headerName: "Priority", width: 120 },
@@ -41,6 +47,13 @@ const columns: GridColDef[] = [
         />
       );
     },
+  },
+  {
+    field: "sync",
+    headerName: "Sync",
+    width: 145,
+    sortable: false,
+    renderCell: (params) => <SyncBadges ticket={params.row.ticket as Ticket} />,
   },
   { field: "companyName", headerName: "Company", width: 200 },
   { field: "dateEntered", headerName: "Created", width: 190 },

@@ -11,7 +11,7 @@
 import { prisma } from '../db/prisma';
 import { config } from '../config/config';
 
-export type IntegrationKey = 'smtp' | 'connectwise' | 'tactical' | 'storage';
+export type IntegrationKey = 'smtp' | 'connectwise' | 'tactical' | 'storage' | 'tickets';
 
 export interface SmtpConfig {
   host: string;
@@ -42,6 +42,17 @@ export interface StorageConfig {
   s3SecretAccessKey: string;
   s3ForcePathStyle: boolean;
 }
+export interface TicketsConfig {
+  /** Minimum width (zero-padded) for generated ticket numbers, 4–6. */
+  numberDigits: number;
+}
+
+function normalizeTicketDigits(value: unknown): number {
+  const parsed = Number(value);
+  return Number.isFinite(parsed)
+    ? Math.min(6, Math.max(4, Math.trunc(parsed)))
+    : config.ticketNumberDigits;
+}
 
 // Which fields are secret per integration (omitted from public views).
 const SECRET_FIELDS: Record<IntegrationKey, string[]> = {
@@ -49,6 +60,7 @@ const SECRET_FIELDS: Record<IntegrationKey, string[]> = {
   connectwise: ['privateKey', 'clientId'],
   tactical: ['apiKey'],
   storage: ['s3SecretAccessKey'],
+  tickets: [],
 };
 
 function envDefaults(key: IntegrationKey): Record<string, unknown> {
@@ -61,6 +73,8 @@ function envDefaults(key: IntegrationKey): Record<string, unknown> {
       return { apiUrl: config.trmm.apiUrl, apiKey: config.trmm.apiKey };
     case 'storage':
       return { ...config.storage };
+    case 'tickets':
+      return { numberDigits: config.ticketNumberDigits };
   }
 }
 
@@ -76,7 +90,7 @@ async function load(key: IntegrationKey): Promise<Record<string, unknown>> {
 
 /** Seed any missing integration rows from env (first boot). */
 export async function seedSettings(): Promise<void> {
-  for (const key of ['smtp', 'connectwise', 'tactical', 'storage'] as IntegrationKey[]) {
+  for (const key of ['smtp', 'connectwise', 'tactical', 'storage', 'tickets'] as IntegrationKey[]) {
     const existing = await prisma.setting.findUnique({ where: { key } });
     if (!existing) {
       await prisma.setting.create({ data: { key, value: envDefaults(key) as object } });
@@ -146,6 +160,13 @@ export async function getStorage(): Promise<StorageConfig> {
   };
 }
 
+export async function getTickets(): Promise<TicketsConfig> {
+  const v = await load('tickets');
+  // Clamp to the supported 4–6 range so an out-of-range DB/env value can't
+  // produce nonsensical padding.
+  return { numberDigits: normalizeTicketDigits(v.numberDigits ?? config.ticketNumberDigits) };
+}
+
 /** Merge a partial update; blank secret fields are dropped (keep existing). */
 export async function updateSetting(
   key: IntegrationKey,
@@ -155,7 +176,7 @@ export async function updateSetting(
   const next = { ...current };
   for (const [k, val] of Object.entries(patch)) {
     if (SECRET_FIELDS[key].includes(k) && (val === '' || val == null)) continue; // keep existing secret
-    next[k] = val;
+    next[k] = key === 'tickets' && k === 'numberDigits' ? normalizeTicketDigits(val) : val;
   }
   await prisma.setting.upsert({
     where: { key },

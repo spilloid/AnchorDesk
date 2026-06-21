@@ -1,4 +1,9 @@
-import { buildReferenceChain, generateMessageId } from './threading';
+import {
+  buildReferenceChain,
+  generateMessageId,
+  tagSubjectWithTicket,
+  ticketNumberFromSubject,
+} from './threading';
 
 describe('buildReferenceChain', () => {
   it('returns empty chain for a brand-new thread', () => {
@@ -46,5 +51,25 @@ describe('generateMessageId', () => {
 
   it('produces unique ids', () => {
     expect(generateMessageId('a@b.com')).not.toBe(generateMessageId('a@b.com'));
+  });
+});
+
+describe('ticket-number subject tags', () => {
+  it('prepends a public ticket number to outbound subjects', () => {
+    expect(tagSubjectWithTicket('Printer is offline', '10042')).toBe('[#10042] Printer is offline');
+  });
+
+  it('does not duplicate an existing tag', () => {
+    expect(tagSubjectWithTicket('[#10042] Printer is offline', '10042')).toBe('[#10042] Printer is offline');
+  });
+
+  it('extracts bracketed and bare ticket numbers from replies', () => {
+    expect(ticketNumberFromSubject('Re: [#10042] Printer is offline')).toBe('10042');
+    expect(ticketNumberFromSubject('Re: ticket #10042')).toBe('10042');
+  });
+
+  it('ignores subjects without a supported ticket number', () => {
+    expect(ticketNumberFromSubject('Hello there')).toBeNull();
+    expect(ticketNumberFromSubject('Issue #42')).toBeNull();
   });
 });

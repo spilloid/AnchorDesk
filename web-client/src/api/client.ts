@@ -242,6 +242,7 @@ export interface IntegrationsView {
   connectwise: { server?: string; company?: string; publicKey?: string; hasPrivateKey?: boolean; hasClientId?: boolean };
   tactical: { apiUrl?: string; hasApiKey?: boolean };
   storage: StorageView;
+  tickets: { numberDigits?: number };
 }
 
 export function getIntegrations() {
@@ -249,7 +250,7 @@ export function getIntegrations() {
 }
 
 export function updateIntegration(
-  key: "smtp" | "connectwise" | "tactical" | "storage",
+  key: "smtp" | "connectwise" | "tactical" | "storage" | "tickets",
   data: Record<string, unknown>
 ) {
   return request<Record<string, unknown>>(`/integrations/${key}`, { method: "PATCH", body: JSON.stringify(data) });
@@ -455,8 +456,29 @@ export function deleteNote(ticketId: number, noteId: number) {
 
 // ─── Sync ────────────────────────────────────────────────────────────────────
 
+export interface SyncProvider {
+  id: number;
+  name: string;
+  type: string;
+  enabled: boolean;
+  lastSyncedAt: string | null;
+  createdAt?: string;
+}
+
 export function listSyncProviders() {
-  return request<unknown[]>('/sync/providers');
+  return request<SyncProvider[]>('/sync/providers');
+}
+
+export function createSyncProvider(data: {
+  name: string;
+  type: "connectwise";
+  enabled?: boolean;
+  config?: Record<string, unknown>;
+}) {
+  return request<SyncProvider>('/sync/providers', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
 }
 
 export function runSync(provider?: string) {
@@ -472,10 +494,14 @@ export function getSyncLog(opts: { provider?: string; limit?: number } = {}) {
 }
 
 export function toggleSyncProvider(providerId: number, enabled: boolean) {
-  return request<unknown>(`/sync/providers/${providerId}`, {
+  return request<SyncProvider>(`/sync/providers/${providerId}`, {
     method: 'PATCH',
     body: JSON.stringify({ enabled }),
   });
+}
+
+export function deleteSyncProvider(providerId: number) {
+  return request<void>(`/sync/providers/${providerId}`, { method: 'DELETE' });
 }
 
 // ─── Devices ──────────────────────────────────────────────────────────────────
@@ -502,6 +528,29 @@ export function listDevices(filters: DeviceFilters = {}) {
 
 export function getDevice(id: number) {
   return request<unknown>(`/devices/${id}`);
+}
+
+export interface TacticalLiveData {
+  provider: "tactical_rmm";
+  fetchedAt: string;
+  agentId: string;
+  hostname: string | null;
+  status: string;
+  operatingSystem: string | null;
+  platform: string | null;
+  localIps: string[];
+  publicIp: string | null;
+  clientName: string | null;
+  siteName: string | null;
+  monitoringType: string | null;
+  lastSeen: string | null;
+  makeModel: string | null;
+  serialNumber: string | null;
+  cpuModel: string | null;
+}
+
+export function getDeviceLive(id: number) {
+  return request<TacticalLiveData>(`/devices/${id}/live`);
 }
 
 export function createDevice(data: Record<string, unknown>) {

@@ -26,6 +26,13 @@ anchordesk is a **local-first ticketing system** built on Material UI design pri
 > - **Ticket export** — `GET /tickets/:id/export` returns a self-contained printable HTML doc (activity + images inlined as data URIs) for Print → PDF.
 > - **Fuzzy search** — `pg_trgm` trigram similarity combined with FTS, across ticket text + priority + ticket number + note bodies (`ticketRepository.search`, indexes in `pgExtras`).
 > - **Modal polish** — ticket-field edits show a live saving → saved/failed indicator.
+>
+> **As of 1.9.0 ("Thread & Signal"):** public ticket identity and integration operations are consistent end to end.
+> - **Ticket numbering** — generated 4–6 digit `ticketNumber` values are independent of row IDs and render across cards, table, Kanban, dialog, search, exports, and tagged outbound subjects.
+> - **Mail threading hardening** — outbound mail adds `[#NNNNN]`; inbound IMAP falls back to that subject token when RFC threading headers disappear. Message-ID columns are `varchar(255)` and bounded external strings are clamped before writes.
+> - **Sync operations** — provider create/delete/toggle/run is available in the Sync view, with reusable provenance badges on tickets.
+> - **Live Tactical panel** — `/devices/:id/live` fetches current Tactical agent state when a linked ticket opens.
+> - **Operational safety** — positive-integer route parsing rejects NaN IDs, integration settings seed from env, and SOPS supports deployment secrets.
 
 Key design goals:
 - Excellent standalone ticketing experience first

@@ -33,6 +33,9 @@ services:
   backend:
     build:
       context: ./backend
+    # Local compose owns schema application; Kubernetes uses its dedicated
+    # prisma-db-push initContainer instead.
+    command: ["sh", "-c", "npx prisma db push --skip-generate && ./node_modules/.bin/ts-node --transpile-only src/index.ts"]
     ports:
       - 8060:8060
     depends_on:

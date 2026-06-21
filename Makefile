@@ -38,14 +38,17 @@ push: ## Push images to registry (docker login ghcr.io first)
 
 # ─── k8s deployment ───────────────────────────────────────────────────────────
 
-secrets: ## Create k8s Secret from k8s/dev/secrets.env (copy from secrets.example.env)
+secrets: ## Create plaintext deployment secret + SOPS-managed integration secret
 	@test -f k8s/dev/secrets.env || (echo "ERROR: k8s/dev/secrets.env not found. Copy secrets.example.env and fill in values." && exit 1)
+	@test -f k8s/dev/integrations.sops.env || (echo "ERROR: k8s/dev/integrations.sops.env not found." && exit 1)
 	kubectl create namespace $(NS) --dry-run=client -o yaml | kubectl apply -f -
 	kubectl create secret generic anchordesk-secrets \
 	  --from-env-file=k8s/dev/secrets.env \
 	  --namespace=$(NS) \
 	  --dry-run=client -o yaml | kubectl apply -f -
-	@echo "Secret applied."
+	sops exec-file k8s/dev/integrations.sops.env \
+	  'kubectl create secret generic anchordesk-integration-secrets --from-env-file={} --namespace=$(NS) --dry-run=client -o yaml | kubectl apply -f -'
+	@echo "Secrets applied."
 
 deploy: ## Apply all k8s manifests (namespace + dev/)
 	kubectl apply -f k8s/namespace.yaml

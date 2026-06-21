@@ -25,7 +25,7 @@ import DashboardAppBar from "./components/DashboardAppBar";
 import DashboardDrawer from "./components/DashboardDrawer";
 import TicketCard from "./components/TicketCard";
 import FilterDialog from "./components/FilterDialog";
-import CWManageView from "./components/CWManageView";
+import SyncView from "./components/SyncView";
 import AdminView from "./components/AdminView";
 import NetworkView from "./components/NetworkView";
 import CompaniesView from "./components/CompaniesView";
@@ -51,7 +51,7 @@ import FilterListIcon from "@mui/icons-material/FilterList";
 function mapDbTicket(t: Record<string, unknown>): Ticket & { localId: number } {
   return {
     localId: t.id as number,
-    ticketnumber: t.id as number,
+    ticketnumber: String(t.ticketNumber ?? t.id),
     ticketTitle: String(t.title ?? ""),
     ticketSummary: String(t.summary ?? t.description ?? ""),
     status: String(t.status ?? "New"),
@@ -68,6 +68,9 @@ function mapDbTicket(t: Record<string, unknown>): Ticket & { localId: number } {
     responseDueAt: (t.responseDueAt as string | null) ?? null,
     resolutionDueAt: (t.resolutionDueAt as string | null) ?? null,
     firstRespondedAt: (t.firstRespondedAt as string | null) ?? null,
+    source: String(t.source ?? "local"),
+    externalProvider: t.externalProvider ? String(t.externalProvider) : undefined,
+    externalId: t.externalId ? String(t.externalId) : undefined,
     labels: (t.labels as Ticket["labels"]) ?? [],
   };
 }
@@ -353,7 +356,7 @@ function App() {
               onViewNetwork={(name) => { setNetworkCompany(name); setViewMode("network"); }}
             />
           ) : viewMode === "sync" ? (
-            <CWManageView onTicketsChanged={fetchTickets} />
+            <SyncView onTicketsChanged={fetchTickets} />
           ) : (
             <>
           {error && <Typography color="error">Error: {error.message}</Typography>}

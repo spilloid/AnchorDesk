@@ -3,6 +3,8 @@ import { prisma } from '../db/prisma';
 import * as audit from './auditRepository';
 import { publish } from '../services/realtime/eventBus';
 import { computeSlaFields } from '../services/sla';
+import { getTickets } from '../services/settingsService';
+import { clamp } from '../util/strings';
 
 export interface TicketListOptions {
   status?: string;
@@ -184,27 +186,49 @@ export async function search(q: string, limit = 50) {
   return ids.map((id) => byId.get(id)).filter(Boolean);
 }
 
+/** Look up a ticket by its human-friendly ticket number (exact match). */
+export async function findByNumber(ticketNumber: string) {
+  return prisma.ticket.findFirst({ where: { ticketNumber } });
+}
+
+/**
+ * Draw the next human-friendly ticket number from the Postgres sequence and
+ * left-pad it to the configured width (so a 4-digit setting still yields 0042
+ * until the sequence outgrows it). The sequence (created in pgExtras) is the
+ * monotonic source of truth; the digit setting only controls min width.
+ */
+async function nextTicketNumber(): Promise<string> {
+  const { numberDigits } = await getTickets();
+  const [{ nextval }] = await prisma.$queryRaw<{ nextval: bigint }[]>`SELECT nextval('ticket_number_seq')`;
+  return String(nextval).padStart(numberDigits, '0');
+}
+
 export async function create(input: CreateTicketInput, actorSub: string) {
   // If linked to a Company, keep companyName in sync with the Company record.
   const companyName = input.companyId ? await companyNameFor(input.companyId) : input.companyName;
   // Score SLA at creation time; deadlines are anchored to "now" (= createdAt).
   const sla = await computeSlaFields(input.priority, input.companyId, new Date());
+  // Externally-sourced tickets keep their provider's number; everything else
+  // gets a generated, human-friendly number from the sequence.
+  const ticketNumber = input.ticketNumber ?? (await nextTicketNumber());
   const ticket = await prisma.ticket.create({
     data: {
-      title: input.title,
-      summary: input.summary,
+      // Clamp bounded VarChar columns so wild inbound email subjects/Message-IDs
+      // can't overflow and 500 the insert (see schema column widths).
+      title: clamp(input.title, 255),
+      summary: clamp(input.summary, 500),
       description: input.description,
       status: input.status ?? 'New',
       priority: input.priority,
-      companyName,
+      companyName: clamp(companyName, 150),
       companyId: input.companyId ?? undefined,
       contactId: input.contactId ?? undefined,
-      assignee: input.assignee,
+      assignee: clamp(input.assignee, 100),
       assigneeId: input.assigneeId,
       source: input.source ?? 'local',
-      ticketNumber: input.ticketNumber,
-      externalId: input.externalId,
-      externalProvider: input.externalProvider,
+      ticketNumber: clamp(ticketNumber, 50),
+      externalId: clamp(input.externalId, 255),
+      externalProvider: clamp(input.externalProvider, 50),
       slaPolicyId: sla.slaPolicyId ?? undefined,
       responseDueAt: sla.responseDueAt,
       resolutionDueAt: sla.resolutionDueAt,
@@ -227,10 +251,18 @@ export async function update(id: number, input: UpdateTicketInput, actorSub: str
   const before = await prisma.ticket.findUnique({ where: { id } });
   if (!before) return null;
 
-  const data: Prisma.TicketUncheckedUpdateInput = { ...input };
+  const data: Prisma.TicketUncheckedUpdateInput = {
+    ...input,
+    title: clamp(input.title, 255),
+    summary: clamp(input.summary, 500),
+    status: clamp(input.status, 100),
+    priority: clamp(input.priority, 50),
+    companyName: clamp(input.companyName, 150),
+    assignee: clamp(input.assignee, 100),
+  };
   // Re-denormalize companyName when the company link changes.
   if (input.companyId !== undefined) {
-    data.companyName = input.companyId ? await companyNameFor(input.companyId) : null;
+    data.companyName = input.companyId ? clamp(await companyNameFor(input.companyId), 150) : null;
   }
 
   // Recompute SLA deadlines when priority or company changes, anchored to the

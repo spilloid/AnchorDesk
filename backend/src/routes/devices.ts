@@ -2,6 +2,8 @@ import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { DeviceSource } from '@prisma/client';
 import * as deviceRepo from '../repositories/deviceRepository';
 import * as audit from '../repositories/auditRepository';
+import * as tactical from '../services/tacticalService';
+import { parseId } from '../util/ids';
 
 interface IdParam { id: string }
 
@@ -22,9 +24,53 @@ export async function deviceRoutes(server: FastifyInstance) {
 
   // Get one device with its ticket links
   server.get('/devices/:id', async (req: FastifyRequest<{ Params: IdParam }>, reply: FastifyReply) => {
-    const device = await deviceRepo.getById(parseInt(req.params.id));
+    const id = parseId(req.params.id);
+    if (id === null) return reply.status(400).send({ error: 'invalid device id' });
+    const device = await deviceRepo.getById(id);
     if (!device) return reply.status(404).send({ error: 'Device not found' });
     return reply.send(device);
+  });
+
+  // Fetch current agent details directly from Tactical RMM. The local device
+  // remains the source of truth; this endpoint is an on-open operational glance.
+  server.get('/devices/:id/live', async (req: FastifyRequest<{ Params: IdParam }>, reply: FastifyReply) => {
+    const id = parseId(req.params.id);
+    if (id === null) return reply.status(400).send({ error: 'invalid device id' });
+    const device = await deviceRepo.getById(id);
+    if (!device) return reply.status(404).send({ error: 'Device not found' });
+    if (device.source !== 'tactical_rmm' || !device.externalId) {
+      return reply.status(409).send({ error: 'Live data is only available for Tactical RMM devices' });
+    }
+    if (!tactical.isConfigured()) {
+      return reply.status(503).send({ error: 'Tactical RMM is not configured' });
+    }
+
+    try {
+      const agent = await tactical.getAgent(device.externalId);
+      return reply.send({
+        provider: 'tactical_rmm',
+        fetchedAt: new Date().toISOString(),
+        agentId: agent.agent_id,
+        hostname: agent.hostname ?? device.hostname ?? device.displayName,
+        status: agent.status ?? 'unknown',
+        operatingSystem: agent.operating_system ?? null,
+        platform: agent.plat ?? null,
+        localIps: String(agent.local_ips ?? '').split(/[,\s]+/).filter(Boolean),
+        publicIp: agent.public_ip ?? null,
+        clientName: agent.client_name ?? null,
+        siteName: agent.site_name ?? null,
+        monitoringType: agent.monitoring_type ?? null,
+        lastSeen: agent.last_seen ?? null,
+        makeModel: agent.make_model ?? null,
+        serialNumber: agent.serial_number ?? null,
+        cpuModel: Array.isArray(agent.cpu_model)
+          ? agent.cpu_model.join(', ')
+          : agent.cpu_model ?? null,
+      });
+    } catch (err) {
+      server.log.warn({ err, deviceId: id }, 'Tactical live device lookup failed');
+      return reply.status(502).send({ error: (err as Error).message });
+    }
   });
 
   // Create a device manually (standalone — no RMM required)
