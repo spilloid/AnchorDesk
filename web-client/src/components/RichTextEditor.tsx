@@ -117,7 +117,8 @@ const RichTextEditor: React.FC<RichTextEditorProps> = ({ value, onChange, minHei
   // guarded so typing — which round-trips through onChange — doesn't reset the cursor.
   useEffect(() => {
     if (editor && value !== editor.getHTML()) {
-      editor.commands.setContent(value || "", false);
+      // TipTap v3: second arg is an options object (was a boolean in v2).
+      editor.commands.setContent(value || "", { emitUpdate: false });
     }
   }, [value, editor]);
 
