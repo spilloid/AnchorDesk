@@ -226,7 +226,7 @@
     <div class="wrap">
       <div class="hero-grid">
         <div>
-          <span class="pill">● v1.8.0 — multi-identity email, labels, attachments, live updates &amp; SLA</span>
+          <span class="pill">● v1.9.0 — public ticket numbers, resilient mail threading &amp; live Tactical data</span>
           <h1>Ticketing that knows<br><span class="accent">the machines</span> behind the ticket.</h1>
           <p class="lead">A self-hosted helpdesk where <b>your database is the source of truth</b> — with threaded email intake, linked devices, RMM actions, and actor-attributed history.</p>
           <div class="cta">
@@ -243,7 +243,7 @@
         </div>
         <div>
           <div class="mock" role="img" aria-label="Example ticket card linked to a device">
-            <div class="mock-top"><span class="dot"></span> Ticket #1042 · ACME Corp</div>
+            <div class="mock-top"><span class="dot"></span> Ticket #10042 · ACME Corp</div>
             <div class="mock-body">
               <div class="mrow"><span class="k">Title</span><span>VPN drops on ACME-PC-01</span></div>
               <div class="mrow"><span class="k">Status</span><span class="chip amber">In Progress</span></div>
@@ -273,7 +273,7 @@
         <div class="card reveal">
           <div class="ico"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M4 4h16a2 2 0 0 1 2 2v3a2 2 0 0 0 0 6v3a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2v-3a2 2 0 0 0 0-6V6a2 2 0 0 1 2-2z"/></svg></div>
           <h3>Local-first ticketing</h3>
-          <p>Create, assign, filter, and update tickets in card, table, or Kanban views. PostgreSQL remains the durable source of truth.</p>
+          <p>Create, assign, filter, and update tickets in card, table, or Kanban views. Configurable public ticket numbers stay independent of internal database IDs.</p>
         </div>
         <div class="card reveal">
           <div class="ico"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M13 3a9 9 0 1 0 8 5h-2.1A7 7 0 1 1 13 5.1V3z"/><path d="M12 8v5l4 2"/></svg></div>
@@ -288,7 +288,7 @@
         <div class="card reveal">
           <div class="ico"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M13 2 4.5 13H11l-1 9 9-12h-6.5z"/></svg></div>
           <h3>Act on machines</h3>
-          <p>Browse Tactical RMM scripts, run them immediately or schedule them, and retain job status and output against the device and ticket.</p>
+          <p>See live Tactical agent state when a ticket opens, then run scripts immediately or on a schedule and retain their output against the ticket.</p>
         </div>
         <div class="card reveal">
           <div class="ico"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2 4 6v6c0 5 3.4 8.5 8 10 4.6-1.5 8-5 8-10V6z"/></svg></div>
@@ -298,7 +298,7 @@
         <div class="card reveal">
           <div class="ico"><svg viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="12" r="3"/><path d="M5 12a7 7 0 0 1 7-7M19 12a7 7 0 0 1-7 7" stroke="currentColor" stroke-width="1.6" fill="none"/></svg></div>
           <h3>Multi-identity email</h3>
-          <p>Poll multiple IMAP mailboxes (auto-tagged with labels), thread replies onto the ticket, and reply as a shared box or personal alias with <b>Cc/Bcc</b>, contact autocomplete, signatures, templates, and inline images.</p>
+          <p>Poll multiple IMAP mailboxes, tag outbound subjects with <b>[#NNNNN]</b> for resilient threading, and reply as a shared box or personal alias with Cc/Bcc, signatures, templates, and inline images.</p>
         </div>
         <div class="card reveal">
           <div class="ico"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2zm1 5v5l4 2-.8 1.7L11 13V7z"/></svg></div>
@@ -313,7 +313,7 @@
         <div class="card reveal">
           <div class="ico"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M4 4h16v16H4z" opacity=".25"/><path d="M7 8h10v2H7zm0 4h10v2H7zm0 4h6v2H7z"/></svg></div>
           <h3>Admin console</h3>
-          <p>See live operational counts and recent activity, then manage users, auth, integrations, mailboxes, probes, devices, and audit events.</p>
+          <p>See operational counts and recent activity, then manage users, auth, integrations, sync providers, mailboxes, probes, devices, and audit events.</p>
         </div>
         <div class="card reveal">
           <div class="ico"><svg viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="12" r="3"/><path d="M5 12a7 7 0 0 1 7-7M19 12a7 7 0 0 1-7 7" stroke="currentColor" stroke-width="1.6" fill="none"/></svg></div>
@@ -367,10 +367,10 @@ cd ../web-client &amp;&amp; npm install &amp;&amp; npm run <span class="s">dev</
         <p>Use only what fits your environment. Integration credentials can be seeded from environment variables and managed later from the Admin UI.</p>
       </div>
       <div class="integrations">
-        <div class="int reveal"><div class="badge">Available</div><h4>ConnectWise Manage</h4><p>Inbound ticket and note sync with provider status and logs.</p></div>
+        <div class="int reveal"><div class="badge">Available</div><h4>ConnectWise Manage</h4><p>Manage providers in the UI, then run inbound ticket and note sync with status and logs.</p></div>
         <div class="int reveal"><div class="badge">Available</div><h4>netviz probe</h4><p>LAN device discovery → device ingest.</p></div>
-        <div class="int reveal"><div class="badge">Available</div><h4>Tactical RMM</h4><p>Device sync and remote script execution.</p></div>
-        <div class="int reveal"><div class="badge">Available</div><h4>IMAP &amp; SMTP</h4><p>Threaded email-to-ticket and outbound ticket replies.</p></div>
+        <div class="int reveal"><div class="badge">Available</div><h4>Tactical RMM</h4><p>Device sync, live agent details, and remote script execution.</p></div>
+        <div class="int reveal"><div class="badge">Available</div><h4>IMAP &amp; SMTP</h4><p>Threaded email-to-ticket with RFC headers plus public ticket-number subject tags.</p></div>
       </div>
     </div>
   </section>

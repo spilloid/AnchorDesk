@@ -83,24 +83,33 @@ cd backend && npx prisma db push
 
 ### 3. Configure a provider instance
 
-Insert a row into the `sync_providers` table (via Adminer, Prisma Studio, or a seed script):
+For supported provider types, use the **Sync** view to create, enable, run, or
+delete provider instances. The equivalent API is:
 
-```sql
-INSERT INTO sync_providers (name, type, config, enabled)
-VALUES (
-  'My Platform',
-  'myplatform',
-  '{"apiKey": "...", "baseUrl": "https://myplatform.example.com"}',
-  1
-);
+```http
+POST /sync/providers
+Content-Type: application/json
+
+{
+  "name": "My Platform",
+  "type": "myplatform",
+  "enabled": true,
+  "config": {
+    "board": "Support"
+  }
+}
 ```
 
-### 4. Wire into the sync service (Phase 3)
+Credentials shared by an integration belong in **Admin → Integrations** (seeded
+from environment variables), not in the provider row.
 
-When the sync service is implemented, it will instantiate providers via a factory based on `sync_providers.type`. You'll register your provider in the factory:
+### 4. Wire into the sync service
+
+The sync service instantiates providers via a factory based on
+`sync_providers.type`. Register your provider in the factory:
 
 ```typescript
-// backend/src/services/syncService.ts (future)
+// backend/src/services/syncService.ts
 
 function createProvider(row: SyncProvider): TicketProvider {
   switch (row.type) {
@@ -119,3 +128,4 @@ function createProvider(row: SyncProvider): TicketProvider {
 - The `pushTicket` / `pushNote` methods are optional — implement them only if outbound sync is needed
 - All sync activity is logged to `sync_log` automatically by the sync service
 - If your platform doesn't paginate the same way, handle pagination internally in `fetchTickets` and return a flat array
+- Add the new provider type to the create-route allowlist before exposing it in the Sync UI

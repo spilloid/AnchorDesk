@@ -20,15 +20,15 @@ anchordesk is a local-first ticketing system. The PostgreSQL database is the sou
 │                              └──────────┬──────────┘        │
 │                                         │                    │
 │              ┌──────────────────────────┼─────────────────┐ │
-│              │      Sync Adapters       │  (Phase 3+)     │ │
+│              │      Integration adapters & pollers         │ │
 │              │  ┌────────────────┐  ┌───┴───────────────┐ │ │
-│              │  │ConnectWise     │  │ IMAP              │ │ │
-│              │  │Provider        │  │ Provider          │ │ │
+│              │  │ConnectWise     │  │ IMAP / SMTP       │ │ │
+│              │  │Provider        │  │ mail services     │ │ │
 │              │  └────────────────┘  └───────────────────┘ │ │
 │              └─────────────────────────────────────────────┘ │
 │                                                              │
 │                  ┌──────────────────────────────────────┐   │
-│                  │     RMM Runners (Phase 5+)            │   │
+│                  │     Device providers & RMM runners    │   │
 │                  │  MeshCentral  │  Tactical RMM         │   │
 │                  └──────────────────────────────────────┘   │
 └──────────────────────────────────────────────────────────────┘
@@ -45,11 +45,13 @@ External integrations are defined by interfaces, not concrete implementations. T
 ```
 TicketProvider (interface)
 ├── ConnectWiseProvider    implements TicketProvider
-├── ImapProvider           implements TicketProvider (Phase 4)
 └── YourProvider           implements TicketProvider (add yours)
 
-ScriptRunner (interface, Phase 5)
-├── MeshCentralRunner      implements ScriptRunner
+DeviceProvider (interface)
+├── NetVizProvider         implements DeviceProvider
+└── TacticalRmmProvider    implements DeviceProvider
+
+ScriptRunner (interface)
 └── TacticalRmmRunner      implements ScriptRunner
 ```
 
@@ -74,9 +76,12 @@ The `audit_log` table is an append-only event log. Every state change (create/up
 - Attribution (who changed what and when)
 - An audit trail for compliance purposes
 
-### Factory — provider instantiation (Phase 3)
+### Factory — provider instantiation
 
-When the sync service is implemented, it will instantiate providers from the `sync_providers` table using a factory function. The factory reads `type` from the row and returns the correct `TicketProvider` implementation. Adding a new provider type only requires adding a case to the factory switch.
+The sync service instantiates providers from the `sync_providers` table using a
+factory function. The factory reads `type` from the row and returns the correct
+`TicketProvider` implementation. Provider instances are managed through the Sync
+view and `/sync/providers` routes.
 
 ---
 
@@ -146,7 +151,7 @@ api/client.ts — all fetch() calls go through here
 
 ---
 
-## What's planned but not yet built
+## Delivery status
 
 | Phase | Feature | Status |
 |---|---|---|
@@ -154,6 +159,8 @@ api/client.ts — all fetch() calls go through here
 | 1.1.0 | TOTP MFA (on by default) + recovery codes | **Done** |
 | 1.1.0 | PostgreSQL migration + full-text ticket search | **Done** |
 | 1.1.0 | Network view (NetViz radial map over devices) | **Done** |
-| Phase 4 | IMAP provider (email-to-ticket) | Planned |
-| Phase 5 | ScriptRunner interface + MeshCentral/TacticalRMM | In progress |
+| 1.6.0 | IMAP email-to-ticket + SMTP ticket replies | **Done** |
+| 1.7.0 | Attachments, WebSockets, notifications, SLA | **Done** |
+| 1.8.0 | Multi-identity email, labels, export, fuzzy search | **Done** |
+| 1.9.0 | Public ticket numbers, subject threading fallback, sync management, live Tactical panel | **Done** |
 | Roadmap | Postgres LISTEN/NOTIFY for live probe status | Planned |

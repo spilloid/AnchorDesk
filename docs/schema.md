@@ -13,7 +13,7 @@ The core entity. Created locally or synced from an external source.
 | Column | Type | Notes |
 |---|---|---|
 | `id` | INT PK | Auto-increment local ID — use this for all API calls |
-| `ticket_number` | VARCHAR | External ticket number (e.g. CW ticket #), or null for local-only |
+| `ticket_number` | VARCHAR(50) | Public ticket number. Generated locally from `ticket_number_seq`, or retained from an external provider |
 | `title` | VARCHAR | Required. Short title / subject line |
 | `summary` | VARCHAR | One-liner summary (may duplicate title for CW imports) |
 | `description` | TEXT | Full description / initial note |
@@ -23,7 +23,7 @@ The core entity. Created locally or synced from an external source.
 | `assignee` | VARCHAR | Display name of assigned technician |
 | `assignee_id` | FK → users | Local user FK if assignee is a local user |
 | `source` | ENUM | `local`, `connectwise`, `imap`, `api` |
-| `external_id` | VARCHAR | ID in the upstream system |
+| `external_id` | VARCHAR(255) | ID in the upstream system; may hold an RFC 5322 Message-ID for IMAP tickets |
 | `external_provider` | VARCHAR | e.g. `connectwise`, `imap` |
 | `closed_at` | DATETIME | Set when status transitions to a closed state |
 | `created_at` | DATETIME | Immutable creation timestamp |
@@ -44,10 +44,15 @@ Normalized per-ticket notes and time entries.
 | `content` | TEXT | Note body |
 | `author` | VARCHAR | Display name (denormalized — preserved even if user is removed) |
 | `author_id` | FK → users | Nullable — foreign notes won't have a local user |
-| `note_type` | ENUM | `note` or `time_entry` |
+| `note_type` | ENUM | `note`, `time_entry`, or `email` |
 | `time_start` | DATETIME | Start time for time entries |
 | `time_stop` | DATETIME | Stop time for time entries |
-| `external_id` | VARCHAR | ID in upstream system (for sync dedup) |
+| `external_id` | VARCHAR(255) | ID in upstream system or RFC 5322 Message-ID (for sync/thread dedup) |
+| `direction` | VARCHAR | `inbound` or `outbound` for email notes |
+| `html_content` | TEXT | Sanitized HTML body for email and rich internal notes |
+| `email_from`, `email_to`, `email_cc`, `email_bcc` | VARCHAR/TEXT | Email correspondence metadata |
+| `subject` | VARCHAR(255) | Email subject, including the public ticket tag on outbound messages |
+| `in_reply_to` | VARCHAR(255) | RFC 5322 Message-ID this email replied to |
 | `created_at` | DATETIME | |
 | `updated_at` | DATETIME | |
 
@@ -120,8 +125,8 @@ Configured external integrations. One row per configured source.
 |---|---|---|
 | `id` | INT PK | |
 | `name` | VARCHAR UNIQUE | Human label e.g. `ConnectWise Production` |
-| `type` | ENUM | `connectwise`, `imap`, `tactical_rmm`, `meshcentral` |
-| `config` | JSON | Provider-specific settings (credentials, URLs, etc.) |
+| `type` | ENUM | `connectwise`, `imap`, `tactical_rmm`, `meshcentral`, `netviz` |
+| `config` | JSON | Provider-specific non-secret settings. Shared credentials are managed under Admin → Integrations |
 | `enabled` | BOOL | Disable without deleting |
 | `last_synced_at` | DATETIME | Timestamp of last successful sync run |
 | `created_at` | DATETIME | |
@@ -136,7 +141,7 @@ Record of each individual sync operation (one row per external ticket synced).
 |---|---|---|
 | `id` | BIGINT PK | |
 | `provider_id` | FK → sync_providers | |
-| `external_id` | VARCHAR | External ticket ID |
+| `external_id` | VARCHAR(255) | External ticket ID |
 | `internal_id` | FK → tickets | Local ticket ID if matched/created |
 | `direction` | ENUM | `inbound` or `outbound` |
 | `status` | ENUM | `success`, `error`, `skipped` |
