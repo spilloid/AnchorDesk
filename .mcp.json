@@ -2,7 +2,10 @@
   "mcpServers": {
     "anchordesk": {
       "type": "sse",
-      "url": "https://tickets.spillerstech.us/mcp/sse"
+      "url": "https://tickets.spillerstech.us/mcp/sse",
+      "headers": {
+        "Authorization": "Bearer ${ANCHORDESK_TOKEN}"
+      }
     }
   }
 }

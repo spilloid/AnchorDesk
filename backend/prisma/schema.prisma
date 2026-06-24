@@ -40,9 +40,36 @@ model User {
   sessions        Session[]
   notifications   Notification[]
   mailIdentities  MailIdentity[]
+  apiTokens       ApiToken[]
 
   @@unique([authProvider, subject])
   @@map("users")
+}
+
+// A long-lived personal access token, used by programmatic clients that can't do
+// an interactive login or OIDC handshake (e.g. the MCP voice agent). The client
+// sends the raw token as `Authorization: Bearer adk_…`; we store only its
+// SHA-256 hash, exactly like Session, so the table is useless if read. The token
+// authenticates AS its owning user — the user's role/RBAC apply and mutations are
+// attributed to them (tagged with the auth channel) in the audit log. Revocable
+// instantly (revokedAt) and independently of the user's password/sessions.
+model ApiToken {
+  id         Int       @id @default(autoincrement())
+  userId     Int       @map("user_id")
+  name       String    @db.VarChar(150)
+  tokenHash  String    @unique @map("token_hash") @db.VarChar(64)
+  // First chars of the raw token (e.g. "adk_1a2b3c"), shown in the UI so a user
+  // can tell tokens apart without us ever storing the secret.
+  prefix     String    @db.VarChar(20)
+  lastUsedAt DateTime? @map("last_used_at")
+  expiresAt  DateTime? @map("expires_at")
+  revokedAt  DateTime? @map("revoked_at")
+  createdAt  DateTime  @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("api_tokens")
 }
 
 // Server-side session. The browser cookie carries an opaque random token; we

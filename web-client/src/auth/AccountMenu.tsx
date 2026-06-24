@@ -23,6 +23,17 @@ import LogoutIcon from "@mui/icons-material/Logout";
 import LockIcon from "@mui/icons-material/Lock";
 import SecurityIcon from "@mui/icons-material/Security";
 import DrawIcon from "@mui/icons-material/Draw";
+import KeyIcon from "@mui/icons-material/Key";
+import DeleteIcon from "@mui/icons-material/Delete";
+import ContentCopyIcon from "@mui/icons-material/ContentCopy";
+import {
+  IconButton as MuiIconButton,
+  List,
+  ListItem,
+  ListItemText,
+  MenuItem as SelectItem,
+  Tooltip,
+} from "@mui/material";
 import { useAuth } from "./AuthContext";
 import * as api from "../api/client";
 import RichTextEditor from "../components/RichTextEditor";
@@ -33,6 +44,7 @@ export default function AccountMenu() {
   const [pwOpen, setPwOpen] = useState(false);
   const [mfaOpen, setMfaOpen] = useState(false);
   const [sigOpen, setSigOpen] = useState(false);
+  const [tokOpen, setTokOpen] = useState(false);
 
   if (!user) return null;
   const close = () => setAnchor(null);
@@ -64,6 +76,10 @@ export default function AccountMenu() {
           <ListItemIcon><DrawIcon fontSize="small" /></ListItemIcon>
           Email signature
         </MenuItem>
+        <MenuItem onClick={() => { setTokOpen(true); close(); }}>
+          <ListItemIcon><KeyIcon fontSize="small" /></ListItemIcon>
+          API tokens
+        </MenuItem>
         <MenuItem onClick={() => { close(); logout(); }}>
           <ListItemIcon><LogoutIcon fontSize="small" /></ListItemIcon>
           Sign out
@@ -73,7 +89,154 @@ export default function AccountMenu() {
       {pwOpen && <ChangePasswordDialog onClose={() => setPwOpen(false)} />}
       {mfaOpen && <ManageMfaDialog onClose={() => setMfaOpen(false)} />}
       {sigOpen && <SignatureDialog onClose={() => setSigOpen(false)} />}
+      {tokOpen && <ApiTokensDialog onClose={() => setTokOpen(false)} />}
     </>
+  );
+}
+
+function ApiTokensDialog({ onClose }: { onClose: () => void }) {
+  const [tokens, setTokens] = useState<api.ApiToken[]>([]);
+  const [loaded, setLoaded] = useState(false);
+  const [name, setName] = useState("");
+  const [expiry, setExpiry] = useState("never");
+  const [created, setCreated] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
+  const [msg, setMsg] = useState<string | null>(null);
+
+  const reload = () =>
+    api.listApiTokens().then((t) => { setTokens(t); setLoaded(true); }).catch(() => setLoaded(true));
+
+  useEffect(() => { reload(); }, []);
+
+  const create = async () => {
+    setMsg(null);
+    try {
+      const days = expiry === "never" ? undefined : Number(expiry);
+      const r = await api.createApiToken(name.trim(), days);
+      setCreated(r.secret);
+      setCopied(false);
+      setName("");
+      reload();
+    } catch (e) { setMsg(errText(e)); }
+  };
+
+  const revoke = async (id: number) => {
+    setMsg(null);
+    try { await api.revokeApiToken(id); reload(); }
+    catch (e) { setMsg(errText(e)); }
+  };
+
+  const copy = async () => {
+    if (!created) return;
+    try { await navigator.clipboard.writeText(created); setCopied(true); } catch { /* clipboard blocked */ }
+  };
+
+  const fmt = (d: string | null) => (d ? new Date(d).toLocaleDateString() : null);
+
+  return (
+    <Dialog open onClose={onClose} fullWidth maxWidth="sm">
+      <DialogTitle>API tokens</DialogTitle>
+      <DialogContent>
+        <Stack spacing={2} sx={{ mt: 1 }}>
+          {msg && <Alert severity="error">{msg}</Alert>}
+          <Typography variant="caption" color="text.secondary">
+            Personal access tokens authenticate programmatic clients (e.g. the MCP voice agent) as
+            you. Actions are logged under your account. Send the token as{" "}
+            <code>Authorization: Bearer &lt;token&gt;</code>. Treat it like a password.
+          </Typography>
+
+          {created && (
+            <Alert
+              severity="success"
+              action={
+                <Tooltip title={copied ? "Copied" : "Copy"}>
+                  <MuiIconButton color="inherit" size="small" onClick={copy}>
+                    <ContentCopyIcon fontSize="small" />
+                  </MuiIconButton>
+                </Tooltip>
+              }
+            >
+              Copy your new token now — it won't be shown again:
+              <Box sx={{ fontFamily: "monospace", mt: 1, wordBreak: "break-all" }}>{created}</Box>
+            </Alert>
+          )}
+
+          <Stack direction="row" spacing={1} alignItems="flex-start">
+            <TextField
+              label="Token name"
+              size="small"
+              fullWidth
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="e.g. Voice agent"
+            />
+            <TextField
+              label="Expires"
+              size="small"
+              select
+              value={expiry}
+              onChange={(e) => setExpiry(e.target.value)}
+              sx={{ minWidth: 120 }}
+            >
+              <SelectItem value="never">Never</SelectItem>
+              <SelectItem value="30">30 days</SelectItem>
+              <SelectItem value="90">90 days</SelectItem>
+              <SelectItem value="365">1 year</SelectItem>
+            </TextField>
+            <Button variant="contained" disabled={!name.trim()} onClick={create} sx={{ mt: 0.25 }}>
+              Create
+            </Button>
+          </Stack>
+
+          {loaded && tokens.length === 0 && (
+            <Typography variant="body2" color="text.secondary">No tokens yet.</Typography>
+          )}
+          {tokens.length > 0 && (
+            <List dense disablePadding>
+              {tokens.map((t) => {
+                const expired = !!t.expiresAt && new Date(t.expiresAt).getTime() < Date.now();
+                const inactive = !!t.revokedAt || expired;
+                return (
+                  <ListItem
+                    key={t.id}
+                    divider
+                    secondaryAction={
+                      !t.revokedAt && (
+                        <Tooltip title="Revoke">
+                          <MuiIconButton edge="end" color="error" size="small" onClick={() => revoke(t.id)}>
+                            <DeleteIcon fontSize="small" />
+                          </MuiIconButton>
+                        </Tooltip>
+                      )
+                    }
+                  >
+                    <ListItemText
+                      primary={
+                        <Stack direction="row" spacing={1} alignItems="center">
+                          <span style={{ opacity: inactive ? 0.5 : 1 }}>{t.name}</span>
+                          <code style={{ fontSize: 12, opacity: 0.7 }}>{t.prefix}…</code>
+                          {t.revokedAt && <Chip size="small" color="default" label="revoked" />}
+                          {expired && !t.revokedAt && <Chip size="small" color="warning" label="expired" />}
+                        </Stack>
+                      }
+                      secondary={
+                        [
+                          t.lastUsedAt ? `Last used ${fmt(t.lastUsedAt)}` : "Never used",
+                          t.expiresAt ? `Expires ${fmt(t.expiresAt)}` : null,
+                        ].filter(Boolean).join(" · ")
+                      }
+                    />
+                  </ListItem>
+                );
+              })}
+            </List>
+          )}
+        </Stack>
+      </DialogContent>
+      <DialogActions>
+        <Button onClick={onClose}>Close</Button>
+      </DialogActions>
+    </Dialog>
   );
 }
 

@@ -7,8 +7,15 @@ import * as notes from '../repositories/noteRepository';
 import * as audit from '../repositories/auditRepository';
 import * as ticketMail from '../services/mail/ticketMail';
 import { mailTransport } from '../services/mail/SmtpMailTransport';
+import { actorFor } from '../middleware/auth';
 
-function buildMcpServer(): McpServer {
+/**
+ * Build a server bound to one connection's identity. `actor` is the audit string
+ * for every mutation made over this session — the authenticated user, tagged
+ * with the `mcp` channel — so MCP actions are attributed to the real person who
+ * issued the personal access token, not a shared placeholder.
+ */
+function buildMcpServer(actor: string): McpServer {
   const server = new McpServer({ name: 'anchordesk', version: '1.0.0' });
 
   server.tool(
@@ -52,8 +59,8 @@ function buildMcpServer(): McpServer {
       companyName: z.string().optional(),
       assignee: z.string().optional(),
     },
-    async (args, extra) => {
-      const changedBy = (extra?.authInfo as { sub?: string } | undefined)?.sub ?? 'mcp';
+    async (args) => {
+      const changedBy = actor;
       const ticket = await tickets.create(args, changedBy);
       return { content: [{ type: 'text', text: JSON.stringify(ticket, null, 2) }] };
     },
@@ -72,8 +79,8 @@ function buildMcpServer(): McpServer {
       assignee: z.string().optional(),
       companyName: z.string().optional(),
     },
-    async ({ id, ...fields }, extra) => {
-      const changedBy = (extra?.authInfo as { sub?: string } | undefined)?.sub ?? 'mcp';
+    async ({ id, ...fields }) => {
+      const changedBy = actor;
       const updated = await tickets.update(id, fields, changedBy);
       return { content: [{ type: 'text', text: JSON.stringify(updated, null, 2) }] };
     },
@@ -87,8 +94,8 @@ function buildMcpServer(): McpServer {
       content: z.string().describe('Note text'),
       author: z.string().optional().default('MCP Agent'),
     },
-    async ({ ticketId, content, author }, extra) => {
-      const changedBy = (extra?.authInfo as { sub?: string } | undefined)?.sub ?? 'mcp';
+    async ({ ticketId, content, author }) => {
+      const changedBy = actor;
       const note = await notes.create(ticketId, { content, author, noteType: 'note' }, changedBy);
       return { content: [{ type: 'text', text: JSON.stringify(note, null, 2) }] };
     },
@@ -105,8 +112,8 @@ function buildMcpServer(): McpServer {
       note: z.string().optional().describe('Optional note for the entry'),
       author: z.string().optional().default('MCP Agent'),
     },
-    async ({ ticketId, minutes, start, stop, note, author }, extra) => {
-      const changedBy = (extra?.authInfo as { sub?: string } | undefined)?.sub ?? 'mcp';
+    async ({ ticketId, minutes, start, stop, note, author }) => {
+      const changedBy = actor;
       let mins = minutes ?? 0;
       let timeStart: Date | undefined;
       let timeStop: Date | undefined;
@@ -174,14 +181,17 @@ function buildMcpServer(): McpServer {
 export async function mcpRoutes(app: FastifyInstance) {
   const transports = new Map<string, SSEServerTransport>();
 
-  // SSE endpoint — MCP client connects here to receive events
+  // SSE endpoint — MCP client connects here to receive events. The auth hook has
+  // already resolved req.user from the personal access token on the upgrade, so
+  // the whole session acts as that user and audits under them (mcp channel).
   app.get('/mcp/sse', async (req, reply) => {
     const transport = new SSEServerTransport('/mcp/messages', reply.raw);
     transports.set(transport.sessionId, transport);
 
     reply.raw.on('close', () => transports.delete(transport.sessionId));
 
-    const mcpServer = buildMcpServer();
+    const actor = actorFor(req.user.username, 'mcp');
+    const mcpServer = buildMcpServer(actor);
     await mcpServer.connect(transport);
   });
 

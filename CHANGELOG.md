@@ -1,5 +1,22 @@
 # Changelog
 
+## 1.10.0 — 2026-06-23 — Keys & Trails
+
+### Added
+
+- **Personal access tokens.** Self-service API tokens (Account menu → API tokens) let programmatic clients that can't do an interactive or OIDC login — the MCP voice agent being the motivating case — authenticate *as a real user*. The raw `adk_…` token is shown once; only its SHA-256 hash is stored. Tokens carry the owner's role (RBAC unchanged), support optional expiry, and are revocable instantly. Minting is restricted to interactive logins; admins can revoke anyone's token.
+- **Channel-tagged audit attribution.** Mutations now record the real user plus the channel they came through — `alice` (web), `alice (api)` (token REST), or `alice (mcp)` — so you can see *who* acted and *how*.
+
+### Changed
+
+- **MCP server requires authentication and attributes per user.** `/mcp/sse` is gated behind a personal access token (or session) and the server is built per-connection bound to that user. Send the token as `Authorization: Bearer <token>` (see `.mcp.json`).
+
+### Fixed
+
+- MCP mutations previously logged under a flat `'mcp'` actor regardless of who connected; they are now attributed to the authenticated user.
+
+See [RELEASE_NOTES_v1.10.0.md](RELEASE_NOTES_v1.10.0.md) for the full release notes.
+
 ## 1.9.1 — 2026-06-21
 
 ### Added

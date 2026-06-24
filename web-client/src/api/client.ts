@@ -119,6 +119,34 @@ export function changeOwnPassword(currentPassword: string, newPassword: string) 
   });
 }
 
+// ─── Personal access tokens (self-service) ───────────────────────────────────
+
+export interface ApiToken {
+  id: number;
+  name: string;
+  prefix: string;
+  lastUsedAt: string | null;
+  expiresAt: string | null;
+  revokedAt: string | null;
+  createdAt: string;
+}
+
+export function listApiTokens() {
+  return request<ApiToken[]>("/auth/tokens");
+}
+
+/** Create a token. The raw `secret` is returned exactly once — surface it now. */
+export function createApiToken(name: string, expiresInDays?: number) {
+  return request<{ token: ApiToken; secret: string }>("/auth/tokens", {
+    method: "POST",
+    body: JSON.stringify({ name, expiresInDays }),
+  });
+}
+
+export function revokeApiToken(id: number) {
+  return request<{ ok: boolean }>(`/auth/tokens/${id}`, { method: "DELETE" });
+}
+
 // ─── Admin: users ──────────────────────────────────────────────────────────────
 
 export interface ManagedUser extends AuthUser {

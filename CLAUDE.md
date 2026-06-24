@@ -68,7 +68,12 @@ GoF patterns in use:
 - **Observer (append-only log)** — every mutation goes through `auditRepository.record()` before responding
 
 ### Auth flow (1.1.0)
-- `middleware/auth.ts` runs on every request. It resolves a **session cookie** (browser login) or an **OIDC bearer token** (API clients) to a `request.user` carrying a role, then enforces baseline RBAC (`readonly` can't mutate). `requireRole('admin')` gates admin surfaces. Public paths: `/ping`, `/probe/*`, and the `/auth/*` login endpoints.
+- `middleware/auth.ts` runs on every request. It resolves a **session cookie** (browser login), a **personal access token** (`Authorization: Bearer adk_…`, resolved locally — see below), or an **OIDC bearer token** (API clients) to a `request.user` carrying a role, then enforces baseline RBAC (`readonly` can't mutate). `requireRole('admin')` gates admin surfaces. Public paths: `/ping`, `/probe/*`, and the `/auth/*` login endpoints.
+
+### Personal access tokens / MCP auth
+- **Personal access tokens (PATs)** let credential-limited programmatic clients — the **MCP voice agent** being the motivating case — authenticate *as a real user*. Users mint/revoke their own from the account menu (**API tokens**); the raw `adk_…` token is shown once and only its SHA-256 hash is stored (`ApiToken`, mirrors `Session`). A PAT carries the owner's role, so RBAC is unchanged. Minting is gated to interactive logins (a token can't farm more tokens); admins may revoke anyone's. Service: `services/auth/apiTokens.ts`; routes: `routes/apiTokens.ts`.
+- **Audit attribution** stays the real user, tagged with the channel they came through: `actorFor(username, channel)` yields `alice` (web), `alice (api)` (token REST), or `alice (mcp)` (MCP). The actor flows via `request.actorSub`, so every existing repository audit records the right person + channel with no route changes. The MCP server is built per SSE connection bound to that connection's user (`buildMcpServer(actor)`) — MCP mutations are no longer a flat `'mcp'`.
+- **Connecting MCP:** point an SSE client at `/mcp/sse` with `Authorization: Bearer <token>` (see `.mcp.json`, which reads `${ANCHORDESK_TOKEN}`). The `/mcp/*` endpoints are *not* public — they require a valid PAT (or a session). With `OIDC_DISABLED=true` (dev) every request is the dev admin, including MCP.
 - Login flows live in `routes/auth.ts` → services in `services/auth/` (`password`, `sessions`, `oidcService`, `samlService`, `totp`, `authConfig`, `bootstrap`).
 - Auth config is seeded from env on first boot into the `auth_settings` row, then editable from **Admin → Authentication** (DB wins). Secrets are write-only over the API.
 
@@ -171,6 +176,7 @@ OIDC_ISSUER_URL=https://authentik.yourdomain.com/application/o/<app-slug>/
 | GET | `/auth/oidc/login` · `/auth/oidc/callback` | OIDC SSO handshake |
 | GET | `/auth/saml/login` · POST `/auth/saml/callback` · GET `/auth/saml/metadata` | SAML SSO |
 | GET | `/auth/me` · POST `/auth/logout` · POST `/auth/password` | Current user / logout / change own password |
+| GET/POST | `/auth/tokens` · DELETE `/auth/tokens/:id` | Self-service personal access tokens (list / mint / revoke) |
 | * | `/users`, `/users/:id`, `/users/:id/password` | Admin user CRUD (admin role) |
 | GET/PATCH | `/auth/settings` | Admin: view/edit auth config (admin role) |
 

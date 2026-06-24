@@ -24,6 +24,7 @@ import { config } from '../config/config';
 import { resolveSession, SESSION_COOKIE } from '../services/auth/sessions';
 import { getAuthSettings } from '../services/auth/authConfig';
 import * as userRepo from '../repositories/userRepository';
+import * as apiTokens from '../services/auth/apiTokens';
 import { isPublic } from './publicPaths';
 
 export { isPublic };
@@ -40,9 +41,20 @@ export interface AuthUser {
 declare module 'fastify' {
   interface FastifyRequest {
     user: AuthUser;
-    // Stable actor string for the audit log (username for humans, sub for tokens).
+    // Stable actor string for the audit log. Plain username for interactive
+    // logins; suffixed with the channel (e.g. "alice (api)") for token clients
+    // so mutations stay attributed to the real user while showing how they came in.
     actorSub: string;
+    // How this request authenticated: 'web' (session/OIDC) or 'api' (personal token).
+    authChannel: AuthChannel;
   }
+}
+
+export type AuthChannel = 'web' | 'api' | 'mcp';
+
+/** Audit actor string: the user, tagged with the channel for non-web access. */
+export function actorFor(username: string, channel: AuthChannel): string {
+  return channel === 'web' ? username : `${username} (${channel})`;
 }
 
 const DEV_ADMIN: AuthUser = {
@@ -121,6 +133,7 @@ export async function registerAuthHook(server: FastifyInstance) {
     server.addHook('onRequest', async (request: FastifyRequest) => {
       request.user = DEV_ADMIN;
       request.actorSub = 'system';
+      request.authChannel = 'web';
     });
     return;
   }
@@ -135,18 +148,36 @@ export async function registerAuthHook(server: FastifyInstance) {
       if (user) {
         request.user = toAuthUser(user);
         request.actorSub = user.username;
+        request.authChannel = 'web';
         return enforceBaseline(request, reply);
       }
     }
 
-    // 2. Bearer token (programmatic OIDC clients).
+    // 2. Bearer token. Two kinds share the scheme: our personal access tokens
+    //    (prefix-tagged, resolved locally) and OIDC access tokens (validated
+    //    against the IdP). PATs are the cheaper, offline check, so try first.
     const authHeader = request.headers.authorization;
     if (authHeader?.startsWith('Bearer ')) {
+      const bearer = authHeader.slice(7);
+
+      if (apiTokens.isPatFormat(bearer)) {
+        const user = await apiTokens.resolve(bearer);
+        if (user) {
+          request.user = toAuthUser(user);
+          request.actorSub = actorFor(user.username, 'api');
+          request.authChannel = 'api';
+          return enforceBaseline(request, reply);
+        }
+        // A malformed/revoked PAT is never a valid OIDC token — fail fast.
+        return reply.status(401).send({ error: 'Authentication required' });
+      }
+
       try {
-        const user = await resolveBearer(authHeader.slice(7));
+        const user = await resolveBearer(bearer);
         if (user) {
           request.user = user;
-          request.actorSub = user.username;
+          request.actorSub = actorFor(user.username, 'api');
+          request.authChannel = 'api';
           return enforceBaseline(request, reply);
         }
       } catch (err) {

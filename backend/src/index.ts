@@ -20,6 +20,7 @@ import { syncRoutes } from './routes/sync';
 import { pingRoutes } from './routes/ping';
 import { mcpRoutes } from './routes/mcp';
 import { authRoutes } from './routes/auth';
+import { apiTokenRoutes } from './routes/apiTokens';
 import { userRoutes } from './routes/users';
 import { integrationRoutes } from './routes/integrations';
 import { adminRoutes } from './routes/admin';
@@ -81,6 +82,8 @@ async function start() {
 
   // Auth: login flows, session, self-service (public + authed endpoints).
   server.register(authRoutes);
+  // Personal access tokens (self-service) — used by MCP / programmatic clients.
+  server.register(apiTokenRoutes);
   // Admin: user management + auth settings (admin role required).
   server.register(userRoutes);
   // Admin: integrations (SMTP/CW/Tactical settings + IMAP mailboxes).
