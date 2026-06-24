@@ -118,12 +118,14 @@ function App() {
   const [ticketDialogOpen, setTicketDialogOpen] = useState(false);
   const [selectedTicket, setSelectedTicket] = useState<Ticket | null>(null);
   const [ticketNotes, setTicketNotes] = useState<Note[]>([]);
-  const [viewMode, setViewMode] = useState<"cards" | "table" | "kanban" | "sync" | "admin" | "network" | "companies">("cards");
+  const [viewMode, setViewMode] = useState<"cards" | "table" | "kanban" | "sync" | "admin" | "network" | "companies">("kanban");
   const [toast, setToast] = useState<{ message: string; severity: "success" | "error" } | null>(null);
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [networkCompany, setNetworkCompany] = useState<string | undefined>(undefined);
+  // Legacy DataGrid table view is opt-in via an admin setting; off by default.
+  const [legacyTableView, setLegacyTableView] = useState(false);
 
   const pageSize = PAGE_SIZE[viewMode] ?? 50;
 
@@ -212,6 +214,17 @@ function App() {
   useEffect(() => {
     if (user) fetchTickets();
   }, [fetchTickets, user]);
+
+  // Load interface prefs once signed in (gates the legacy table view).
+  useEffect(() => {
+    if (!user) return;
+    api.getUiSettings().then((s) => setLegacyTableView(s.legacyTableView)).catch(() => {});
+  }, [user]);
+
+  // If the legacy table is disabled while it's the active view, fall back.
+  useEffect(() => {
+    if (!legacyTableView && viewMode === "table") setViewMode("kanban");
+  }, [legacyTableView, viewMode]);
 
   // Page size differs per view, so reset to page 1 when switching views.
   useEffect(() => { setPage(1); }, [viewMode]);
@@ -312,9 +325,11 @@ function App() {
                 value={viewMode}
                 onChange={(_e, v) => v && setViewMode(v)}
               >
-                <ToggleButton value="cards"><Tooltip title="Cards"><ViewModuleIcon fontSize="small" /></Tooltip></ToggleButton>
-                <ToggleButton value="table"><Tooltip title="Table"><TableRowsIcon fontSize="small" /></Tooltip></ToggleButton>
                 <ToggleButton value="kanban"><Tooltip title="Board"><ViewKanbanIcon fontSize="small" /></Tooltip></ToggleButton>
+                <ToggleButton value="cards"><Tooltip title="Cards"><ViewModuleIcon fontSize="small" /></Tooltip></ToggleButton>
+                {legacyTableView && (
+                  <ToggleButton value="table"><Tooltip title="Table (legacy)"><TableRowsIcon fontSize="small" /></Tooltip></ToggleButton>
+                )}
               </ToggleButtonGroup>
 
               <TextField

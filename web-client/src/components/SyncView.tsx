@@ -29,6 +29,7 @@ import ErrorIcon from "@mui/icons-material/Error";
 import AddIcon from "@mui/icons-material/Add";
 import DeleteIcon from "@mui/icons-material/Delete";
 import * as api from "../api/client";
+import { useAuth } from "../auth/AuthContext";
 
 interface SyncLogEntry {
   id: string;
@@ -54,6 +55,9 @@ interface Props {
 }
 
 export default function SyncView({ onTicketsChanged }: Props) {
+  // Sync is one surface for everyone: techs can view activity and trigger runs;
+  // only admins can add/remove/enable providers (the config half).
+  const { isAdmin } = useAuth();
   const [providers, setProviders] = useState<api.SyncProvider[]>([]);
   const [syncLog, setSyncLog] = useState<SyncLogEntry[]>([]);
   const [syncing, setSyncing] = useState<Record<string, boolean>>({});
@@ -199,9 +203,11 @@ export default function SyncView({ onTicketsChanged }: Props) {
             Configured Providers
           </Typography>
           <Stack direction="row" spacing={1}>
-            <Button variant="outlined" startIcon={<AddIcon />} onClick={() => setCreateOpen(true)}>
-              Add provider
-            </Button>
+            {isAdmin && (
+              <Button variant="outlined" startIcon={<AddIcon />} onClick={() => setCreateOpen(true)}>
+                Add provider
+              </Button>
+            )}
             <Button
               variant="contained"
               startIcon={syncing["__all__"] ? <CircularProgress size={16} color="inherit" /> : <SyncIcon />}
@@ -246,6 +252,7 @@ export default function SyncView({ onTicketsChanged }: Props) {
                       size="small"
                       checked={p.enabled}
                       onChange={() => handleToggleProvider(p)}
+                      disabled={!isAdmin}
                     />
                   </TableCell>
                   <TableCell align="right">
@@ -264,15 +271,17 @@ export default function SyncView({ onTicketsChanged }: Props) {
                     >
                       Sync Now
                     </Button>
-                    <IconButton
-                      size="small"
-                      color="error"
-                      aria-label={`Delete ${p.name}`}
-                      onClick={() => handleDeleteProvider(p)}
-                      disabled={Object.values(syncing).some(Boolean)}
-                    >
-                      <DeleteIcon fontSize="small" />
-                    </IconButton>
+                    {isAdmin && (
+                      <IconButton
+                        size="small"
+                        color="error"
+                        aria-label={`Delete ${p.name}`}
+                        onClick={() => handleDeleteProvider(p)}
+                        disabled={Object.values(syncing).some(Boolean)}
+                      >
+                        <DeleteIcon fontSize="small" />
+                      </IconButton>
+                    )}
                   </TableCell>
                 </TableRow>
               ))}

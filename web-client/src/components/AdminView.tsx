@@ -36,29 +36,29 @@ import PeopleIcon from "@mui/icons-material/People";
 import SecurityIcon from "@mui/icons-material/Security";
 import CableIcon from "@mui/icons-material/Cable";
 import EmailIcon from "@mui/icons-material/Email";
-import SyncIcon from "@mui/icons-material/Sync";
 import RouterIcon from "@mui/icons-material/Router";
 import DevicesIcon from "@mui/icons-material/Devices";
 import HistoryIcon from "@mui/icons-material/History";
 import TimerIcon from "@mui/icons-material/Timer";
 import LabelIcon from "@mui/icons-material/Label";
+import TuneIcon from "@mui/icons-material/Tune";
 import * as api from "../api/client";
 import { TICKET_PRIORITIES } from "../ticketVocab";
 
 type AdminSection =
-  | "overview" | "users" | "auth" | "integrations" | "sla" | "mailboxes" | "mail" | "labels"
-  | "providers" | "probes" | "devices" | "audit";
+  | "overview" | "users" | "auth" | "integrations" | "interface" | "sla" | "mailboxes" | "mail" | "labels"
+  | "probes" | "devices" | "audit";
 
 const NAV: { id: AdminSection; label: string; icon: React.ReactNode }[] = [
   { id: "overview", label: "Overview", icon: <DashboardIcon /> },
   { id: "users", label: "Users & Roles", icon: <PeopleIcon /> },
   { id: "auth", label: "Authentication", icon: <SecurityIcon /> },
   { id: "integrations", label: "Integrations", icon: <CableIcon /> },
+  { id: "interface", label: "Interface", icon: <TuneIcon /> },
   { id: "sla", label: "SLA Policies", icon: <TimerIcon /> },
   { id: "mailboxes", label: "Mailboxes", icon: <EmailIcon /> },
   { id: "mail", label: "Mail Identities", icon: <EmailIcon /> },
   { id: "labels", label: "Labels", icon: <LabelIcon /> },
-  { id: "providers", label: "Sync Providers", icon: <SyncIcon /> },
   { id: "probes", label: "Probes", icon: <RouterIcon /> },
   { id: "devices", label: "Devices", icon: <DevicesIcon /> },
   { id: "audit", label: "Audit Log", icon: <HistoryIcon /> },
@@ -88,11 +88,11 @@ export default function AdminView() {
         {section === "users" && <UsersPanel />}
         {section === "auth" && <AuthSettingsPanel />}
         {section === "integrations" && <IntegrationsPanel />}
+        {section === "interface" && <InterfacePanel />}
         {section === "sla" && <SlaPanel />}
         {section === "mailboxes" && <MailboxesPanel />}
         {section === "mail" && <MailIdentitiesPanel />}
         {section === "labels" && <LabelsPanel />}
-        {section === "providers" && <ProvidersPanel />}
         {section === "probes" && <ProbesPanel />}
         {section === "devices" && <DevicesPanel />}
         {section === "audit" && <AuditPanel />}
@@ -346,53 +346,49 @@ function useAsync<T>(loader: () => Promise<T>, deps: unknown[] = []) {
   return { data, loading, error, reload };
 }
 
-function ProvidersPanel() {
-  const { data, loading, error, reload } = useAsync(() => api.listSyncProviders() as Promise<any[]>);
+function InterfacePanel() {
+  const { data, loading, error, reload } = useAsync(() => api.getUiSettings());
+  const [saving, setSaving] = useState(false);
+  const [msg, setMsg] = useState<string | null>(null);
 
-  const toggle = async (id: number, enabled: boolean) => {
-    await api.toggleSyncProvider(id, enabled);
-    reload();
-  };
-  const run = async (name: string) => {
-    await api.runSync(name);
-    reload();
+  const setLegacyTable = async (enabled: boolean) => {
+    setSaving(true);
+    setMsg(null);
+    try {
+      await api.updateUiSettings({ legacyTableView: enabled });
+      reload();
+      setMsg(enabled ? "Legacy table view enabled for everyone." : "Legacy table view hidden.");
+    } catch (e) {
+      setMsg((e as Error).message);
+    } finally {
+      setSaving(false);
+    }
   };
 
   if (loading) return <CircularProgress />;
-  if (error) return <Alert severity="error">{error}</Alert>;
+  if (error || !data) return <Alert severity="error">{error ?? "Failed to load"}</Alert>;
 
   return (
-    <Paper variant="outlined">
-      <Table size="small">
-        <TableHead>
-          <TableRow>
-            <TableCell>Name</TableCell>
-            <TableCell>Type</TableCell>
-            <TableCell>Last Synced</TableCell>
-            <TableCell>Enabled</TableCell>
-            <TableCell align="right">Actions</TableCell>
-          </TableRow>
-        </TableHead>
-        <TableBody>
-          {(data ?? []).map((p) => (
-            <TableRow key={p.id}>
-              <TableCell>{p.name}</TableCell>
-              <TableCell><Chip size="small" label={p.type} /></TableCell>
-              <TableCell>{p.lastSyncedAt ? new Date(p.lastSyncedAt).toLocaleString() : "never"}</TableCell>
-              <TableCell>
-                <Switch checked={!!p.enabled} onChange={(e) => toggle(p.id, e.target.checked)} />
-              </TableCell>
-              <TableCell align="right">
-                <Button size="small" disabled={!p.enabled} onClick={() => run(p.name)}>Sync now</Button>
-              </TableCell>
-            </TableRow>
-          ))}
-          {(data ?? []).length === 0 && (
-            <TableRow><TableCell colSpan={5}>No sync providers configured.</TableCell></TableRow>
-          )}
-        </TableBody>
-      </Table>
-    </Paper>
+    <Stack spacing={2}>
+      <Typography variant="h5">Interface</Typography>
+      <Paper variant="outlined" sx={{ p: 2 }}>
+        <Stack direction="row" alignItems="center" justifyContent="space-between">
+          <Box>
+            <Typography variant="subtitle2">Legacy table view</Typography>
+            <Typography variant="body2" color="text.secondary" sx={{ maxWidth: 560 }}>
+              Adds the older DataGrid table to the ticket view switcher (Board · Cards · Table).
+              Board and Cards are the primary views — leave this off unless someone relies on the table.
+            </Typography>
+          </Box>
+          <Switch
+            checked={data.legacyTableView}
+            disabled={saving}
+            onChange={(e) => setLegacyTable(e.target.checked)}
+          />
+        </Stack>
+        {msg && <Alert severity="info" sx={{ mt: 2 }}>{msg}</Alert>}
+      </Paper>
+    </Stack>
   );
 }
 

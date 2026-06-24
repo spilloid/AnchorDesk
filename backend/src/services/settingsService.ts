@@ -11,7 +11,10 @@
 import { prisma } from '../db/prisma';
 import { config } from '../config/config';
 
-export type IntegrationKey = 'smtp' | 'connectwise' | 'tactical' | 'storage' | 'tickets';
+// Keyed rows in the `settings` table. Mostly external-integration config, plus
+// 'ui' which holds interface preferences (read by every authed user, not just
+// admins — see routes/uiSettings.ts).
+export type IntegrationKey = 'smtp' | 'connectwise' | 'tactical' | 'storage' | 'tickets' | 'ui';
 
 export interface SmtpConfig {
   host: string;
@@ -49,6 +52,11 @@ export interface TicketsConfig {
   /** Minimum width (zero-padded) for generated ticket numbers, 4–6. */
   numberDigits: number;
 }
+export interface UiConfig {
+  /** Show the legacy DataGrid table view in the ticket view switcher. Off by
+   *  default — Board/Cards are the primary views; an admin opts the table in. */
+  legacyTableView: boolean;
+}
 
 function normalizeTicketDigits(value: unknown): number {
   const parsed = Number(value);
@@ -64,6 +72,7 @@ const SECRET_FIELDS: Record<IntegrationKey, string[]> = {
   tactical: ['apiKey'],
   storage: ['s3SecretAccessKey'],
   tickets: [],
+  ui: [],
 };
 
 function envDefaults(key: IntegrationKey): Record<string, unknown> {
@@ -78,6 +87,8 @@ function envDefaults(key: IntegrationKey): Record<string, unknown> {
       return { ...config.storage };
     case 'tickets':
       return { numberDigits: config.ticketNumberDigits };
+    case 'ui':
+      return { legacyTableView: false };
   }
 }
 
@@ -93,7 +104,7 @@ async function load(key: IntegrationKey): Promise<Record<string, unknown>> {
 
 /** Seed any missing integration rows from env (first boot). */
 export async function seedSettings(): Promise<void> {
-  for (const key of ['smtp', 'connectwise', 'tactical', 'storage', 'tickets'] as IntegrationKey[]) {
+  for (const key of ['smtp', 'connectwise', 'tactical', 'storage', 'tickets', 'ui'] as IntegrationKey[]) {
     const existing = await prisma.setting.findUnique({ where: { key } });
     if (!existing) {
       await prisma.setting.create({ data: { key, value: envDefaults(key) as object } });
@@ -171,6 +182,11 @@ export async function getTickets(): Promise<TicketsConfig> {
   // Clamp to the supported 4–6 range so an out-of-range DB/env value can't
   // produce nonsensical padding.
   return { numberDigits: normalizeTicketDigits(v.numberDigits ?? config.ticketNumberDigits) };
+}
+
+export async function getUi(): Promise<UiConfig> {
+  const v = await load('ui');
+  return { legacyTableView: Boolean(v.legacyTableView ?? false) };
 }
 
 /** Merge a partial update; blank secret fields are dropped (keep existing). */

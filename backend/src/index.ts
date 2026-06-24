@@ -23,6 +23,7 @@ import { authRoutes } from './routes/auth';
 import { apiTokenRoutes } from './routes/apiTokens';
 import { userRoutes } from './routes/users';
 import { integrationRoutes } from './routes/integrations';
+import { uiSettingsRoutes } from './routes/uiSettings';
 import { adminRoutes } from './routes/admin';
 import { companyRoutes } from './routes/companies';
 import { registerAuthHook } from './middleware/auth';
@@ -88,6 +89,8 @@ async function start() {
   server.register(userRoutes);
   // Admin: integrations (SMTP/CW/Tactical settings + IMAP mailboxes).
   server.register(integrationRoutes);
+  // Interface preferences (read by all authed users; written by admins).
+  server.register(uiSettingsRoutes);
   // Admin: console overview + audit-log viewer.
   server.register(adminRoutes);
 

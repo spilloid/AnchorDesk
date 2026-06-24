@@ -284,6 +284,22 @@ export function updateIntegration(
   return request<Record<string, unknown>>(`/integrations/${key}`, { method: "PATCH", body: JSON.stringify(data) });
 }
 
+// ─── Interface preferences (ui settings) ─────────────────────────────────────
+
+export interface UiSettings {
+  legacyTableView: boolean;
+}
+
+/** Readable by any authenticated user — drives nav/view gating. */
+export function getUiSettings() {
+  return request<UiSettings>("/ui-settings");
+}
+
+/** Admin-only write. */
+export function updateUiSettings(data: Partial<UiSettings>) {
+  return request<UiSettings>("/ui-settings", { method: "PATCH", body: JSON.stringify(data) });
+}
+
 // ─── Mailboxes (IMAP email-to-ticket) ─────────────────────────────────────────
 
 export interface Mailbox {
