@@ -30,6 +30,7 @@ import AddIcon from "@mui/icons-material/Add";
 import DeleteIcon from "@mui/icons-material/Delete";
 import * as api from "../api/client";
 import { useAuth } from "../auth/AuthContext";
+import IntegrationsRoadmap from "./IntegrationsRoadmap";
 
 interface SyncLogEntry {
   id: string;
@@ -361,6 +362,8 @@ export default function SyncView({ onTicketsChanged }: Props) {
           </Table>
         )}
       </Paper>
+
+      <IntegrationsRoadmap />
 
       <Dialog open={createOpen} onClose={() => !creating && setCreateOpen(false)} fullWidth maxWidth="sm">
         <DialogTitle>Add sync provider</DialogTitle>
