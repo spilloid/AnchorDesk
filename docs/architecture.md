@@ -163,4 +163,8 @@ api/client.ts — all fetch() calls go through here
 | 1.7.0 | Attachments, WebSockets, notifications, SLA | **Done** |
 | 1.8.0 | Multi-identity email, labels, export, fuzzy search | **Done** |
 | 1.9.0 | Public ticket numbers, subject threading fallback, sync management, live Tactical panel | **Done** |
+| 1.10.0 | Personal access tokens + per-connection MCP auth (actor-attributed) | **Done** |
+| 1.11.0 | Navigation / IA pass (board default, scoped Sync menus) | **Done** |
+| 1.12.0 | My Day time day-spread, company-scoped device linking | **Done** |
+| 1.13.0 | Page-fill board (no Closed column, fall-off close), regex advanced search, denser ticket cockpit, idempotent IMAP ingest | **Done** |
 | Roadmap | Postgres LISTEN/NOTIFY for live probe status | Planned |

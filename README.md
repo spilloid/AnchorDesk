@@ -22,13 +22,14 @@
 
 What sets it apart from a plain helpdesk: each ticket can become an operations cockpit. Link the **devices** involved, inspect their source and status, run Tactical RMM scripts, send email, and keep the resulting activity on the ticket. Core changes are recorded in an **append-only audit log** with actor and before/after data.
 
-## What ships in v1.9.0
+## What ships in v1.13.0
 
-- **🔢 Human-friendly ticket numbers** — local tickets receive configurable 4–6 digit public numbers independent of database IDs. Cards, tables, Kanban, dialogs, search, email subjects, and exports consistently display the public number.
-- **🧵 Resilient email threading** — outbound subjects carry `[#NNNNN]`; inbound IMAP uses that token as a fallback when mail relays strip `References` or `In-Reply-To`. Message-ID fields are widened and bounded writes are clamped against malformed external input.
-- **🔄 Sync provider management** — create, enable, run, and delete ConnectWise ticket providers from the Sync view, with consistent provider badges across ticket surfaces.
-- **📡 Live Tactical data** — opening a ticket fetches current Tactical RMM details for linked agents, including online state, IPs, OS, site, hardware, and last-seen time.
-- **🛡️ Safer routing and deployment** — malformed ticket/note IDs return clean 400 responses; integration settings seed from environment variables; production secrets can be managed with SOPS.
+- **🗂️ A board built for live work** — **Closed is no longer a column.** Resolving a ticket plays a satisfying fall-off animation as the card drops off the board, and closed tickets are hidden from the default views (surface them anytime with the new *include closed* toggle). The Kanban now fills the page width — no horizontal scrolling.
+- **🔍 Advanced search with regex** — the filter panel is now an advanced search: match tickets with a case-insensitive **POSIX regular expression** across title, summary, description, company, ticket number, and priority — alongside the status / company / assignee / label facets. Invalid patterns are caught before they run.
+- **🪟 A denser ticket cockpit** — the ticket modal was tightened to stop wasting space: status + priority pair on one row and every field uses a consistent floating-label control, so the whole record reads at a glance.
+- **📥 Resilient email-to-ticket** — IMAP ingest is **idempotent on Message-ID**, so the same email delivered to two mailboxes (or replayed on a re-poll) can no longer spawn duplicate tickets or wedge a mailbox on a "poison" message. Connection failures now surface the real server reason instead of a bare `Command failed`.
+
+**Also landed recently:** the **My Day** time day-spread (1.12), **company-scoped device linking** (1.12), built-in **personal access tokens** for MCP/agent auth (1.10), and a streamlined **navigation / IA** pass (1.11).
 
 The core platform also includes:
 
@@ -125,8 +126,8 @@ Open **http://localhost:5173** — `/api/*`, `/probe/*`, and `/mcp/*` are proxie
 
 For the complete Compose stack, run `docker compose up --build`. Tagged release images are published as:
 
-- `ghcr.io/spilloid/anchordesk-backend:1.9.0`
-- `ghcr.io/spilloid/anchordesk-web-client:1.9.0`
+- `ghcr.io/spilloid/anchordesk-backend:1.13.0`
+- `ghcr.io/spilloid/anchordesk-web-client:1.13.0`
 
 ## Configuration
 

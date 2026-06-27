@@ -56,10 +56,10 @@ const KanbanBoard: React.FC<KanbanBoardProps> = ({
 
   return (
     <DragDropContext onDragEnd={handleDragEnd}>
-      {/* Columns flex to share the available width so the board fits the page;
-          they only fall back to horizontal scroll when there are too many
-          statuses to fit comfortably (each keeps a 240px floor). */}
-      <Box sx={{ display: "flex", gap: 2, overflowX: "auto", pb: 1 }}>
+      {/* Columns flex to share the available width so the board always fills the
+          page — never a horizontal scrollbar. minWidth:0 lets them shrink past
+          their content (cards wrap/truncate) so even a narrow viewport fits. */}
+      <Box sx={{ display: "flex", gap: 2, pb: 1, width: "100%" }}>
         {statuses.map((status) => (
           <Droppable droppableId={status} key={status}>
             {(provided, snapshot) => (
@@ -68,7 +68,7 @@ const KanbanBoard: React.FC<KanbanBoardProps> = ({
                 {...provided.droppableProps}
                 sx={{
                   flex: "1 1 0",
-                  minWidth: 240,
+                  minWidth: 0,
                   bgcolor: snapshot.isDraggingOver ? "action.selected" : "grey.50",
                   border: 1,
                   borderColor: "divider",

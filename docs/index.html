@@ -144,6 +144,11 @@
   .card .ico svg { width: 24px; height: 24px; }
   .card h3 { margin: 0 0 8px; font-size: 1.12rem; }
   .card p { margin: 0; color: var(--on-surface-variant); font-size: .95rem; }
+  .card .tag { display:inline-block; margin-bottom:12px; font-size:.7rem; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:var(--primary); background:var(--primary-container); padding:3px 9px; border-radius:100px; }
+
+  /* two-up highlight grid (What's new) */
+  .grid2 { display: grid; grid-template-columns: repeat(2, 1fr); gap: 22px; }
+  @media (max-width: 620px){ .grid2 { grid-template-columns: 1fr; } }
 
   /* how it works */
   .alt { background: var(--surface-variant); }
@@ -211,6 +216,7 @@
   <div class="wrap">
     <a class="brand" href="#top"><svg><use href="#logo"/></svg> AnchorDesk</a>
     <nav class="nav">
+      <a class="link" href="#whats-new">What's new</a>
       <a class="link" href="#features">Features</a>
       <a class="link" href="#how">How it works</a>
       <a class="link" href="#integrations">Integrations</a>
@@ -226,7 +232,7 @@
     <div class="wrap">
       <div class="hero-grid">
         <div>
-          <span class="pill">● v1.9.0 — public ticket numbers, resilient mail threading &amp; live Tactical data</span>
+          <span class="pill">● v1.13.0 — a board built for live work, regex search &amp; a denser ticket cockpit</span>
           <h1>Ticketing that knows<br><span class="accent">the machines</span> behind the ticket.</h1>
           <p class="lead">A self-hosted helpdesk where <b>your database is the source of truth</b> — with threaded email intake, linked devices, RMM actions, and actor-attributed history.</p>
           <div class="cta">
@@ -261,6 +267,39 @@
     </div>
   </section>
 
+  <!-- WHAT'S NEW -->
+  <section id="whats-new" class="alt">
+    <div class="wrap">
+      <div class="section-head reveal">
+        <div class="eyebrow">New in v1.13.0</div>
+        <h2>The board got out of your way.</h2>
+        <p>This release sharpens the daily loop — a board that shows only live work, power-user search, and a tighter ticket cockpit.</p>
+      </div>
+      <div class="grid2">
+        <div class="card reveal">
+          <span class="tag">Board</span>
+          <h3>Closed falls off the board ✨</h3>
+          <p><b>“Closed” is no longer a column.</b> Resolve a ticket and the card plays a fall-off animation as it drops off the board; closed work is hidden by default and one toggle away when you need it. The Kanban fills the page width — no horizontal scrolling.</p>
+        </div>
+        <div class="card reveal">
+          <span class="tag">Search</span>
+          <h3>Advanced search, now with regex</h3>
+          <p>Match tickets with a case-insensitive <b>POSIX regular expression</b> across title, summary, description, company, number, and priority — alongside the status, company, assignee, and label facets. Invalid patterns are caught before they run.</p>
+        </div>
+        <div class="card reveal">
+          <span class="tag">Cockpit</span>
+          <h3>A denser ticket cockpit</h3>
+          <p>The ticket modal was tightened to stop wasting space: status and priority pair on one row and every field uses a consistent floating-label control, so the whole record reads at a glance.</p>
+        </div>
+        <div class="card reveal">
+          <span class="tag">Mail</span>
+          <h3>Resilient email-to-ticket</h3>
+          <p>IMAP ingest is <b>idempotent on Message-ID</b>, so an email delivered to two mailboxes — or replayed on a re-poll — can’t spawn duplicate tickets or wedge a mailbox. Connection errors now name the real server reason.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
   <!-- FEATURES -->
   <section id="features">
     <div class="wrap">
@@ -273,7 +312,7 @@
         <div class="card reveal">
           <div class="ico"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M4 4h16a2 2 0 0 1 2 2v3a2 2 0 0 0 0 6v3a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2v-3a2 2 0 0 0 0-6V6a2 2 0 0 1 2-2z"/></svg></div>
           <h3>Local-first ticketing</h3>
-          <p>Create, assign, filter, and update tickets in card, table, or Kanban views. Configurable public ticket numbers stay independent of internal database IDs.</p>
+          <p>Create, assign, filter, and update tickets in card or Kanban views. The board fills the page and stays focused on live work — closed tickets fall away. Configurable public ticket numbers stay independent of internal database IDs.</p>
         </div>
         <div class="card reveal">
           <div class="ico"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M13 3a9 9 0 1 0 8 5h-2.1A7 7 0 1 1 13 5.1V3z"/><path d="M12 8v5l4 2"/></svg></div>
@@ -318,7 +357,12 @@
         <div class="card reveal">
           <div class="ico"><svg viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="12" r="3"/><path d="M5 12a7 7 0 0 1 7-7M19 12a7 7 0 0 1-7 7" stroke="currentColor" stroke-width="1.6" fill="none"/></svg></div>
           <h3>Audit history &amp; MCP</h3>
-          <p>Browse actor-attributed changes across managed records, while authenticated MCP clients can work with tickets, notes, and history.</p>
+          <p>Browse actor-attributed changes across managed records, while authenticated MCP clients — minted with per-user <b>personal access tokens</b> — work with tickets, notes, time, and history as a real user.</p>
+        </div>
+        <div class="card reveal">
+          <div class="ico"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2zm1 5h-2v6l5 3 1-1.7-4-2.3z"/></svg></div>
+          <h3>My Day time view</h3>
+          <p>A per-tech day-spread of logged time on a vertical clock — overlap-aware lanes, a live "now" line, and labelled <b>gap bands</b> that make the holes in a day obvious. Click any block to open the ticket.</p>
         </div>
       </div>
     </div>

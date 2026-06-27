@@ -1,5 +1,25 @@
 # Changelog
 
+## 1.13.0 — 2026-06-27 — Clear Deck (minor)
+
+### Added
+
+- **Advanced search with regex.** The ticket filter panel becomes an **Advanced search** with a case-insensitive **POSIX regular expression** field matched server-side across title, summary, description, company, ticket number, and priority — alongside the existing status / company / assignee / label facets and a new **include-closed** toggle. Invalid patterns are validated client-side and rejected with a clean **400** (Postgres `2201B`, unwrapped from Prisma's `P2010`) rather than a 500.
+- **Fall-off close animation.** Each Kanban card has a hover **Close** action; closing plays a tip-and-drop animation as the card falls off the board.
+
+### Changed
+
+- **A board built for live work.** **"Closed" is no longer a Kanban column.** Closed tickets are hidden from the default working views (board, cards, table) and surfaced on demand via the advanced-search *include closed* toggle (a Closed column reappears only when closed tickets are actually loaded, so they're never orphaned). The board now **fills the page width** with no horizontal scrolling.
+- **Denser ticket cockpit.** The ticket modal was tightened to stop wasting space: status + priority share one row, card padding is reduced, and every field (status, priority, contact, assignee, labels) uses a consistent floating-label control matching the company picker.
+- **No flash on background refresh.** List views only blank to a spinner on the first load; live WebSocket updates, an optimistic close, and drag-between-columns now swap data in place instead of flashing the board out.
+
+### Fixed
+
+- **Duplicate / wedged IMAP ingest.** Email-to-ticket is now **idempotent on Message-ID**. The same message delivered to two monitored mailboxes (one Message-ID, two deliveries) or replayed on a re-poll no longer hits the `(external_id, external_provider)` unique index — which previously threw `P2002`, failed the whole poll, and wedged the mailbox on a "poison" message because `lastUid` never advanced. Duplicates are skipped (and counted in the poll log); a residual collision recovers by appending to the existing ticket.
+- **Opaque IMAP errors.** A failed poll now surfaces ImapFlow's real reason (`responseText` / `serverResponseCode` / `authenticationFailed`) in the log and the mailbox's last error, instead of a bare `Command failed`.
+
+See [RELEASE_NOTES_v1.13.0.md](RELEASE_NOTES_v1.13.0.md) for the full release notes.
+
 ## 1.12.0 — 2026-06-26 — Clockwork (minor)
 
 ### Added
