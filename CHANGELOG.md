@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.11.2 — 2026-06-26 — Polish (patch)
+
+### Added
+
+- **Integrations roadmap** in the Sync view — a presentational section showing what's live and what's next, badged honestly. Ticket sync (PSA): ConnectWise Manage (available), Autotask (coming soon). RMM sync: Tactical RMM (available), Datto RMM + ConnectWise Automate (coming soon). No change to existing functionality.
+- **Version badge.** The running build version (from `package.json`, baked in at build time) now shows in the account menu — a one-glance answer to "did the deploy land?"
+
+### Fixed
+
+- **Stale UI after deploys.** The web server now sends `Cache-Control: no-store` for the app shell (`index.html`) while keeping fingerprinted `/assets/` cached immutably. New deploys are picked up immediately without a manual hard-refresh or CDN purge.
+
+See [RELEASE_NOTES_v1.11.2.md](RELEASE_NOTES_v1.11.2.md) for the full release notes.
+
 ## 1.11.1 — 2026-06-24 — Switchboard (patch)
 
 ### Added

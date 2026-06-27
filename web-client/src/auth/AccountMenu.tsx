@@ -84,6 +84,12 @@ export default function AccountMenu() {
           <ListItemIcon><LogoutIcon fontSize="small" /></ListItemIcon>
           Sign out
         </MenuItem>
+        <Divider />
+        <Box sx={{ px: 2, py: 0.75 }}>
+          <Typography variant="caption" color="text.secondary">
+            AnchorDesk v{__APP_VERSION__}
+          </Typography>
+        </Box>
       </Menu>
 
       {pwOpen && <ChangePasswordDialog onClose={() => setPwOpen(false)} />}
