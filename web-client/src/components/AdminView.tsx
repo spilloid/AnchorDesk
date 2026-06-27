@@ -509,8 +509,25 @@ function ProbesPanel() {
 
 function DevicesPanel() {
   const { data, loading, error, reload } = useAsync(() => api.listDevices({ pageSize: 200 }) as Promise<any[]>);
+  const [companies, setCompanies] = useState<api.Company[]>([]);
   const [syncing, setSyncing] = useState(false);
   const [syncMsg, setSyncMsg] = useState<string | null>(null);
+
+  useEffect(() => {
+    api.listCompanies().then(setCompanies).catch(() => setCompanies([]));
+  }, []);
+
+  // Resolve an Autocomplete value (known Company or free-typed string) into the
+  // {companyId, companyName} the API expects — mirrors the probe panel so a
+  // device's company can be set/cleared inline, scoping ticket device pickers.
+  const resolveCompany = (value: api.Company | string | null) => {
+    if (!value) return { companyId: null, companyName: null };
+    if (typeof value === "string") {
+      const match = companies.find((c) => c.name.toLowerCase() === value.trim().toLowerCase());
+      return match ? { companyId: match.id, companyName: match.name } : { companyId: null, companyName: value.trim() };
+    }
+    return { companyId: value.id, companyName: value.name };
+  };
 
   const syncTactical = async () => {
     setSyncing(true);
@@ -546,6 +563,7 @@ function DevicesPanel() {
             <TableCell>IP</TableCell>
             <TableCell>MAC</TableCell>
             <TableCell>Type</TableCell>
+            <TableCell>Company</TableCell>
             <TableCell>Source</TableCell>
             <TableCell>Status</TableCell>
             <TableCell>Last Seen</TableCell>
@@ -558,6 +576,20 @@ function DevicesPanel() {
               <TableCell>{d.ipAddress ?? "—"}</TableCell>
               <TableCell>{d.macAddress ?? "—"}</TableCell>
               <TableCell>{d.deviceType ?? "—"}</TableCell>
+              <TableCell sx={{ minWidth: 180 }}>
+                <Autocomplete
+                  freeSolo
+                  size="small"
+                  options={companies}
+                  getOptionLabel={(c) => (typeof c === "string" ? c : c.name)}
+                  value={companies.find((c) => c.id === d.companyId) ?? d.companyName ?? null}
+                  onChange={async (_e, v) => {
+                    await api.updateDevice(d.id, resolveCompany(v as api.Company | string | null));
+                    reload();
+                  }}
+                  renderInput={(params) => <TextField {...params} variant="standard" placeholder="—" />}
+                />
+              </TableCell>
               <TableCell><Chip size="small" label={d.source} /></TableCell>
               <TableCell>
                 <Chip size="small" color={d.status === "online" ? "success" : "default"} label={d.status} />
@@ -566,7 +598,7 @@ function DevicesPanel() {
             </TableRow>
           ))}
           {(data ?? []).length === 0 && (
-            <TableRow><TableCell colSpan={7}>No devices yet — register a probe, sync from Tactical, or add one manually.</TableCell></TableRow>
+            <TableRow><TableCell colSpan={8}>No devices yet — register a probe, sync from Tactical, or add one manually.</TableCell></TableRow>
           )}
         </TableBody>
       </Table>

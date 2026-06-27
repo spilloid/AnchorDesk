@@ -4,7 +4,6 @@
 import React, { useEffect, useRef } from "react";
 import { useEditor, EditorContent, Editor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
-import Link from "@tiptap/extension-link";
 import Image from "@tiptap/extension-image";
 import { Box, ToggleButton, ToggleButtonGroup, Divider, Tooltip } from "@mui/material";
 import FormatBoldIcon from "@mui/icons-material/FormatBold";
@@ -83,12 +82,16 @@ const RichTextEditor: React.FC<RichTextEditorProps> = ({ value, onChange, minHei
   };
 
   const editor = useEditor({
+    // StarterKit v3 bundles the Link extension, so configure it here rather than
+    // registering a second `Link` — duplicate extension names collide on
+    // ProseMirror plugin keys and crash the editor (the signature-dialog bug).
     extensions: [
-      StarterKit,
-      Link.configure({ openOnClick: false, autolink: true }),
+      StarterKit.configure({ link: { openOnClick: false, autolink: true } }),
       Image.configure({ inline: false, HTMLAttributes: { loading: "lazy" } }),
     ],
     content: value,
+    // React 18: don't render the editor during the initial render pass.
+    immediatelyRender: false,
     onUpdate: ({ editor }) => onChange(editor.getHTML()),
     editorProps: onImageUpload
       ? {

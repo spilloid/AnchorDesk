@@ -1,5 +1,5 @@
 // ./components/TicketDialog.tsx
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
 import {
   Dialog,
   DialogContent,
@@ -82,6 +82,7 @@ const TicketDialog: React.FC<TicketDialogProps> = ({ ticket, open, onClose, note
   const [assigneeId, setAssigneeId] = useState<number | "">("");
   const [allDevices, setAllDevices] = useState<any[]>([]);
   const [addDevice, setAddDevice] = useState<any | null>(null);
+  const [showAllDevices, setShowAllDevices] = useState(false);
   const [companies, setCompanies] = useState<api.Company[]>([]);
   const [company, setCompany] = useState<api.Company | null>(null);
   const [contacts, setContacts] = useState<api.Contact[]>([]);
@@ -242,6 +243,23 @@ const TicketDialog: React.FC<TicketDialogProps> = ({ ticket, open, onClose, note
     try { await api.unlinkDevice(ticket.localId, deviceId); reloadDevices(); }
     catch (err) { console.error("unlink device failed", err); }
   };
+
+  // Devices available to link. When the ticket has a company, scope the picker to
+  // that company's hardware so another company's devices can't be mis-associated.
+  // Unassigned devices (no company) stay visible — they're ambiguous, not wrong —
+  // and "Show all companies" is an escape hatch so the user is never boxed in.
+  const ticketCompanyId = (full?.companyId as number | null | undefined) ?? null;
+  const linkableDevices = useMemo(() => {
+    const unlinked = allDevices.filter((d) => !devices.some((ld) => ld.id === d.id));
+    if (showAllDevices || ticketCompanyId == null) return unlinked;
+    return unlinked.filter((d) => d.companyId == null || d.companyId === ticketCompanyId);
+  }, [allDevices, devices, showAllDevices, ticketCompanyId]);
+  const hiddenByCompany =
+    ticketCompanyId != null && !showAllDevices
+      ? allDevices.filter(
+          (d) => !devices.some((ld) => ld.id === d.id) && d.companyId != null && d.companyId !== ticketCompanyId
+        ).length
+      : 0;
 
   const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
 
@@ -481,7 +499,7 @@ const TicketDialog: React.FC<TicketDialogProps> = ({ ticket, open, onClose, note
                   <Autocomplete
                     size="small"
                     sx={{ flexGrow: 1 }}
-                    options={allDevices.filter((d) => !devices.some((ld) => ld.id === d.id))}
+                    options={linkableDevices}
                     getOptionLabel={(d) => `${d.displayName || d.hostname || d.ipAddress || "device"}${d.ipAddress ? ` · ${d.ipAddress}` : ""}`}
                     value={addDevice}
                     onChange={(_e, v) => setAddDevice(v)}
@@ -498,6 +516,25 @@ const TicketDialog: React.FC<TicketDialogProps> = ({ ticket, open, onClose, note
                   />
                   <Button size="small" variant="outlined" disabled={!addDevice} onClick={linkDevice}>Link</Button>
                 </Stack>
+                {ticketCompanyId != null && (hiddenByCompany > 0 || showAllDevices) && (
+                  <FormControlLabel
+                    sx={{ mt: 0.5, ml: 0 }}
+                    control={
+                      <Checkbox
+                        size="small"
+                        checked={showAllDevices}
+                        onChange={(e) => setShowAllDevices(e.target.checked)}
+                      />
+                    }
+                    label={
+                      <Typography variant="caption" color="text.secondary">
+                        {showAllDevices
+                          ? "Showing devices from all companies"
+                          : `Scoped to this company — show all companies (${hiddenByCompany} hidden)`}
+                      </Typography>
+                    }
+                  />
+                )}
               </CardContent>
             </Card>
 
