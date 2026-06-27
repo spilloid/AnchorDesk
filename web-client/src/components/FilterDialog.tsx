@@ -7,7 +7,13 @@ import {
   Autocomplete,
   TextField,
   Stack,
+  Divider,
+  Typography,
+  FormControlLabel,
+  Checkbox,
+  InputAdornment,
 } from "@mui/material";
+import RegexIcon from "@mui/icons-material/Code";
 import { useEffect, useState } from "react";
 import * as api from "../api/client";
 import { TICKET_STATUSES } from "../ticketVocab";
@@ -22,15 +28,18 @@ interface FilterDialogProps {
 }
 
 /**
- * Server-side ticket filters. Options come from canonical sources (status vocab,
- * the company + assignee lists) rather than the current page, so filtering is
- * correct regardless of which page is loaded.
+ * Advanced search. Combines the canonical facet filters (status, company,
+ * assignee, label — sourced from their lists, not the current page) with a raw
+ * POSIX regex matched server-side across ticket text, plus an opt-in to surface
+ * closed tickets (hidden from working views by default).
  */
 const FilterDialog: React.FC<FilterDialogProps> = ({ open, onClose, value, applyFilters }) => {
   const [status, setStatus] = useState(value.status ?? "");
   const [company, setCompany] = useState(value.company ?? "");
   const [assignee, setAssignee] = useState(value.assignee ?? "");
   const [labelId, setLabelId] = useState<number | "">(value.labelId ?? "");
+  const [regex, setRegex] = useState(value.regex ?? "");
+  const [includeClosed, setIncludeClosed] = useState(value.includeClosed ?? false);
   const [companies, setCompanies] = useState<string[]>([]);
   const [assignees, setAssignees] = useState<string[]>([]);
   const [labels, setLabels] = useState<api.Label[]>([]);
@@ -42,24 +51,57 @@ const FilterDialog: React.FC<FilterDialogProps> = ({ open, onClose, value, apply
     setCompany(value.company ?? "");
     setAssignee(value.assignee ?? "");
     setLabelId(value.labelId ?? "");
+    setRegex(value.regex ?? "");
+    setIncludeClosed(value.includeClosed ?? false);
     api.listCompanies().then((cs) => setCompanies(cs.map((c) => c.name))).catch(() => setCompanies([]));
     api.listAssignees().then((as) => setAssignees(as.map((a) => a.displayName || a.username))).catch(() => setAssignees([]));
     api.listLabels().then(setLabels).catch(() => setLabels([]));
   }, [open, value]);
+
+  // A regex is only valid if it compiles; flag a bad one before it round-trips.
+  let regexError = "";
+  if (regex.trim()) {
+    try { new RegExp(regex); } catch (e) { regexError = (e as Error).message; }
+  }
 
   const apply = () => applyFilters({
     status: status || undefined,
     company: company || undefined,
     assignee: assignee || undefined,
     labelId: labelId === "" ? undefined : labelId,
+    regex: regex.trim() || undefined,
+    includeClosed: includeClosed || undefined,
   });
-  const clear = () => { setStatus(""); setCompany(""); setAssignee(""); setLabelId(""); applyFilters({}); };
+  const clear = () => {
+    setStatus(""); setCompany(""); setAssignee(""); setLabelId(""); setRegex(""); setIncludeClosed(false);
+    applyFilters({});
+  };
 
   return (
-    <Dialog open={open} onClose={onClose} fullWidth maxWidth="xs">
-      <DialogTitle>Filter tickets</DialogTitle>
+    <Dialog open={open} onClose={onClose} fullWidth maxWidth="sm">
+      <DialogTitle>Advanced search</DialogTitle>
       <DialogContent>
         <Stack spacing={2} sx={{ mt: 1 }}>
+          <TextField
+            label="Regex"
+            value={regex}
+            onChange={(e) => setRegex(e.target.value)}
+            onKeyDown={(e) => { if (e.key === "Enter" && !regexError) apply(); }}
+            error={!!regexError}
+            helperText={regexError || "Case-insensitive POSIX regex across title, summary, description, company, #, priority. e.g. (vpn|wifi).*down"}
+            fullWidth
+            InputProps={{
+              startAdornment: (
+                <InputAdornment position="start"><RegexIcon fontSize="small" color="action" /></InputAdornment>
+              ),
+              sx: { fontFamily: "monospace" },
+            }}
+          />
+
+          <Divider flexItem>
+            <Typography variant="caption" color="text.secondary">filters</Typography>
+          </Divider>
+
           <Autocomplete
             options={TICKET_STATUSES}
             value={status || null}
@@ -89,12 +131,17 @@ const FilterDialog: React.FC<FilterDialogProps> = ({ open, onClose, value, apply
             onChange={(_e, v) => setLabelId(v ? v.id : "")}
             renderInput={(params) => <TextField {...params} label="Label" />}
           />
+
+          <FormControlLabel
+            control={<Checkbox checked={includeClosed} onChange={(e) => setIncludeClosed(e.target.checked)} />}
+            label="Include closed tickets"
+          />
         </Stack>
       </DialogContent>
       <DialogActions>
         <Button onClick={clear} color="inherit">Clear</Button>
         <Button onClick={onClose}>Cancel</Button>
-        <Button onClick={apply} variant="contained">Apply</Button>
+        <Button onClick={apply} variant="contained" disabled={!!regexError}>Apply</Button>
       </DialogActions>
     </Dialog>
   );

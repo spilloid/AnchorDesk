@@ -348,7 +348,11 @@ export interface TicketFilters {
   assignee?: string;
   company?: string;
   q?: string;
+  /** POSIX regex matched server-side across ticket text. */
+  regex?: string;
   labelId?: number;
+  /** Include closed tickets (default false hides them from working views). */
+  includeClosed?: boolean;
   page?: number;
   pageSize?: number;
 }

@@ -105,6 +105,10 @@ export interface TicketFilterCriteria {
   assignee?: string;
   company?: string;
   labelId?: number;
+  /** POSIX regex matched server-side across ticket text. */
+  regex?: string;
+  /** Surface closed tickets too (default off keeps the board to live work). */
+  includeClosed?: boolean;
 }
 
 function App() {
@@ -145,6 +149,8 @@ function App() {
         assignee: filters.assignee || undefined,
         company: filters.company || undefined,
         labelId: filters.labelId || undefined,
+        regex: filters.regex || undefined,
+        includeClosed: filters.includeClosed || undefined,
       });
       setTickets((res.items as Record<string, unknown>[]).map(mapDbTicket));
       setTotal(res.total);
@@ -198,6 +204,21 @@ function App() {
     } catch (err) {
       setToast({ message: `Failed to update status: ${(err as Error).message}`, severity: "error" });
       fetchTickets(); // revert by re-fetching
+    }
+  };
+
+  // Close from the board: the card has already played its fall-off animation, so
+  // drop it from the page (and total) immediately, then persist. Closed tickets
+  // are hidden by default, so a successful close simply leaves it gone.
+  const handleCloseTicket = async (ticketId: number) => {
+    setTickets((prev) => prev.filter((t) => t.localId !== ticketId));
+    setTotal((n) => Math.max(0, n - 1));
+    try {
+      await api.updateTicket(ticketId, { status: "Closed" });
+      setToast({ message: "Ticket closed", severity: "success" });
+    } catch (err) {
+      setToast({ message: `Failed to close ticket: ${(err as Error).message}`, severity: "error" });
+      fetchTickets(); // restore the card if the write failed
     }
   };
 
@@ -346,7 +367,7 @@ function App() {
                 }}
               />
 
-              <Tooltip title="Filter">
+              <Tooltip title="Advanced search">
                 <IconButton onClick={() => setFilterDialogOpen(true)}>
                   <Badge badgeContent={activeFilterCount} color="primary">
                     <FilterListIcon />
@@ -431,6 +452,7 @@ function App() {
                   tickets={tickets}
                   onStatusChange={(ticketId, newStatus) => handleStatusChange(ticketId, newStatus)}
                   onTicketClick={handleTicketClick}
+                  onTicketClose={handleCloseTicket}
                 />
               </>
             )

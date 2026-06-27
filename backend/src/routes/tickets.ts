@@ -20,8 +20,12 @@ export async function ticketRoutes(server: FastifyInstance) {
       assignee: query.assignee,
       companyName: query.company,
       q: query.q,
+      regex: query.regex,
       labelId: query.labelId ? parseInt(query.labelId) : undefined,
       includeDeleted: query.includeDeleted === 'true',
+      // Default working views hide closed tickets; opt in with includeClosed=true
+      // (or by selecting a specific status, which always wins).
+      includeClosed: query.includeClosed === 'true',
       page: query.page ? parseInt(query.page) : 1,
       pageSize,
     });
