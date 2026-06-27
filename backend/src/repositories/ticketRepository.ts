@@ -13,10 +13,17 @@ export interface TicketListOptions {
   source?: TicketSource;
   /** Free-text filter across title/summary/company (case-insensitive contains). */
   q?: string;
+  /** POSIX regex (case-insensitive `~*`) matched across ticket text. */
+  regex?: string;
   /** Filter to tickets carrying a given label id. */
   labelId?: number;
   /** Exclude soft-deleted tickets (status = 'Deleted'). Default true. */
   includeDeleted?: boolean;
+  /** Include closed tickets. When explicitly false, status 'Closed' is hidden so
+   *  the default working views (board/cards) only show live tickets. */
+  includeClosed?: boolean;
+  /** Internal: constrain to a pre-resolved id set (e.g. regex-matched ids). */
+  idIn?: number[];
   page?: number;
   pageSize?: number;
 }
@@ -25,12 +32,26 @@ export interface TicketListOptions {
  *  always match the rows returned. */
 function buildWhere(filters: Omit<TicketListOptions, 'page' | 'pageSize'>): Prisma.TicketWhereInput {
   const where: Prisma.TicketWhereInput = {};
-  if (filters.status) where.status = filters.status;
   if (filters.assignee) where.assignee = { contains: filters.assignee };
   if (filters.companyName) where.companyName = { contains: filters.companyName };
   if (filters.source) where.source = filters.source;
   if (filters.labelId) where.labels = { some: { labelId: filters.labelId } };
-  if (filters.includeDeleted === false) where.status = { not: 'Deleted' };
+  // A regex filter resolves to a concrete id set upstream (Prisma has no POSIX
+  // regex operator); an empty set must match nothing, not everything.
+  if (filters.idIn) where.id = { in: filters.idIn.length ? filters.idIn : [-1] };
+
+  // Status: an explicit status wins; otherwise hide soft-deleted and (by default)
+  // closed tickets. Exclusions are opt-in (=== false) so MCP/internal callers
+  // that pass neither flag keep their previous, unfiltered behavior.
+  if (filters.status) {
+    where.status = filters.status;
+  } else {
+    const hidden: string[] = [];
+    if (filters.includeDeleted === false) hidden.push('Deleted');
+    if (filters.includeClosed === false) hidden.push('Closed');
+    if (hidden.length) where.status = { notIn: hidden };
+  }
+
   if (filters.q && filters.q.trim()) {
     const q = filters.q.trim();
     where.OR = [
@@ -41,6 +62,38 @@ function buildWhere(filters: Omit<TicketListOptions, 'page' | 'pageSize'>): Pris
     ];
   }
   return where;
+}
+
+/**
+ * Resolve a POSIX regex to the ticket ids whose concatenated text matches it.
+ * Prisma has no `~*` operator, so regex filtering is a raw pre-pass; the ids then
+ * flow into the normal where-clause (composing with status/company/label/paging).
+ * An invalid pattern surfaces as a 400 rather than a 500.
+ */
+async function regexMatchIds(pattern: string, limit = 2000): Promise<number[]> {
+  try {
+    const rows = await prisma.$queryRaw<Array<{ id: number }>>(Prisma.sql`
+      SELECT id FROM tickets
+      WHERE status <> 'Deleted'
+        AND (coalesce(title,'') || ' ' || coalesce(summary,'') || ' ' ||
+             coalesce(description,'') || ' ' || coalesce(company_name,'') || ' ' ||
+             coalesce(ticket_number,'') || ' ' || coalesce(priority,'')) ~* ${pattern}
+      ORDER BY id DESC
+      LIMIT ${limit}
+    `);
+    return rows.map((r) => r.id);
+  } catch (err) {
+    // Postgres raises SQLSTATE 2201B for an invalid regular expression. Prisma
+    // wraps raw-query failures (its own code is P2010), so the real PG code lands
+    // in `meta.code` and the text in `meta.message` — check all of them.
+    const e = err as { code?: string; meta?: { code?: string; message?: string }; message?: string };
+    const pgCode = e.meta?.code ?? e.code;
+    const text = `${e.meta?.message ?? ''} ${e.message ?? ''}`;
+    if (pgCode === '2201B' || /invalid regular expression/i.test(text)) {
+      throw Object.assign(new Error('Invalid regular expression'), { statusCode: 400 });
+    }
+    throw err;
+  }
 }
 
 export interface CreateTicketInput {
@@ -100,8 +153,14 @@ export async function count(filters: Omit<TicketListOptions, 'page' | 'pageSize'
 /** One round-trip: a page of tickets plus the total for the same filters. */
 export async function listPaged(opts: TicketListOptions = {}) {
   const { page = 1, pageSize = 100, ...filters } = opts;
+  // Resolve a regex to ids once, then reuse for both the page and the count so
+  // they stay consistent (and we don't run the raw match twice).
+  if (filters.regex && filters.regex.trim()) {
+    filters.idIn = await regexMatchIds(filters.regex.trim());
+  }
+  delete filters.regex;
   const [items, total] = await Promise.all([
-    list(opts),
+    list({ ...filters, page, pageSize }),
     count(filters),
   ]);
   return { items, total, page, pageSize };

@@ -33,7 +33,6 @@ import EditIcon from "@mui/icons-material/Edit";
 import ComputerIcon from "@mui/icons-material/Computer";
 import TerminalIcon from "@mui/icons-material/Terminal";
 import BusinessIcon from "@mui/icons-material/Business";
-import PersonIcon from "@mui/icons-material/Person";
 import CalendarTodayIcon from "@mui/icons-material/CalendarToday";
 import SyncIcon from "@mui/icons-material/Sync";
 import EmailIcon from "@mui/icons-material/Email";
@@ -337,19 +336,19 @@ const TicketDialog: React.FC<TicketDialogProps> = ({ ticket, open, onClose, note
         </Stack>
       </Box>
 
-      <DialogContent dividers sx={{ bgcolor: "background.default", p: { xs: 1.5, md: 3 } }}>
+      <DialogContent dividers sx={{ bgcolor: "background.default", p: { xs: 1.5, md: 2 } }}>
         <Grid container spacing={2}>
           {/* Main column */}
-          <Grid item xs={12} md={8}>
+          <Grid item xs={12} md={7}>
             <Card>
-              <CardContent>
+              <CardContent sx={{ p: 2, "&:last-child": { pb: 2 } }}>
                 <Typography variant="subtitle2" color="text.secondary" gutterBottom>Description</Typography>
                 <EditableField label="" value={description} onSave={(v) => persist({ description: v })} />
               </CardContent>
             </Card>
 
             <Card sx={{ mt: 2 }}>
-              <CardContent>
+              <CardContent sx={{ p: 2, "&:last-child": { pb: 2 } }}>
                 <Typography variant="subtitle2" color="text.secondary" gutterBottom>Activity & notes</Typography>
                 <NotesSection
                   notes={notes}
@@ -367,25 +366,23 @@ const TicketDialog: React.FC<TicketDialogProps> = ({ ticket, open, onClose, note
           </Grid>
 
           {/* Sidebar */}
-          <Grid item xs={12} md={4}>
+          <Grid item xs={12} md={5}>
             <Card>
-              <CardContent>
+              <CardContent sx={{ p: 2, "&:last-child": { pb: 2 } }}>
                 <Typography variant="subtitle2" color="text.secondary" gutterBottom>Details</Typography>
                 <Stack spacing={1.5}>
-                  <Box>
-                    <Typography variant="caption" color="text.secondary">Status</Typography>
-                    <Select fullWidth size="small" value={status} onChange={(e) => handleStatus(e.target.value)} sx={{ mt: 0.5 }}>
+                  {/* Status + priority share a row — both are short and read at a glance. */}
+                  <Stack direction="row" spacing={1}>
+                    <TextField select label="Status" size="small" fullWidth value={status}
+                      onChange={(e) => handleStatus(e.target.value)}>
                       {TICKET_STATUSES.map((s) => <MenuItem key={s} value={s}>{s}</MenuItem>)}
-                    </Select>
-                  </Box>
-                  <EditableField label="Title" value={title} onSave={(v) => { setTitle(v); persist({ title: v }); }} />
-                  <Box>
-                    <Typography variant="caption" color="text.secondary">Priority</Typography>
-                    <Select fullWidth size="small" value={priority || "Medium"} sx={{ mt: 0.5 }}
+                    </TextField>
+                    <TextField select label="Priority" size="small" fullWidth value={priority || "Medium"}
                       onChange={(e) => { setPriority(e.target.value); persist({ priority: e.target.value }); }}>
                       {TICKET_PRIORITIES.map((p) => <MenuItem key={p} value={p}>{p}</MenuItem>)}
-                    </Select>
-                  </Box>
+                    </TextField>
+                  </Stack>
+                  <EditableField label="Title" value={title} onSave={(v) => { setTitle(v); persist({ title: v }); }} />
                   <Autocomplete
                     size="small"
                     freeSolo
@@ -396,52 +393,53 @@ const TicketDialog: React.FC<TicketDialogProps> = ({ ticket, open, onClose, note
                     renderInput={(params) => <TextField {...params} label="Company" placeholder="Search or type to add…" />}
                   />
                   {company && (
-                    <Box>
-                      <Typography variant="caption" color="text.secondary">Contact</Typography>
-                      <Select fullWidth size="small" value={contactId} displayEmpty sx={{ mt: 0.5 }}
+                    <>
+                      <TextField select label="Contact" size="small" fullWidth value={contactId}
                         onChange={(e) => pickContact(e.target.value === "" ? "" : Number(e.target.value))}>
                         <MenuItem value="">None</MenuItem>
                         {contacts.map((c) => (
                           <MenuItem key={c.id} value={c.id}>{c.name}{c.title ? ` · ${c.title}` : ""}</MenuItem>
                         ))}
-                      </Select>
-                      <Stack direction="row" spacing={1} sx={{ mt: 1 }}>
+                      </TextField>
+                      <Stack direction="row" spacing={1}>
                         <TextField size="small" placeholder="New contact name" value={newContact}
                           onChange={(e) => setNewContact(e.target.value)} sx={{ flexGrow: 1 }}
                           onKeyDown={(e) => e.key === "Enter" && addContactInline()} />
                         <Button size="small" variant="outlined" disabled={!newContact.trim()} onClick={addContactInline}>Add</Button>
                       </Stack>
-                    </Box>
+                    </>
                   )}
-                  <Stack direction="row" spacing={1} alignItems="center">
-                    <Box sx={{ color: "text.secondary", display: "flex" }}><PersonIcon fontSize="small" /></Box>
-                    <Typography variant="caption" color="text.secondary" sx={{ width: 70 }}>Assignee</Typography>
-                    <Select size="small" value={assigneeId} displayEmpty sx={{ flexGrow: 1 }}
-                      onChange={(e) => saveAssignee(e.target.value === "" ? "" : Number(e.target.value))}>
-                      <MenuItem value="">Unassigned</MenuItem>
-                      {assignees.map((a) => (
-                        <MenuItem key={a.id} value={a.id}>{a.displayName || a.username} · {a.role}</MenuItem>
-                      ))}
-                    </Select>
-                  </Stack>
+                  <TextField select label="Assignee" size="small" fullWidth value={assigneeId}
+                    onChange={(e) => saveAssignee(e.target.value === "" ? "" : Number(e.target.value))}>
+                    <MenuItem value="">Unassigned</MenuItem>
+                    {assignees.map((a) => (
+                      <MenuItem key={a.id} value={a.id}>{a.displayName || a.username} · {a.role}</MenuItem>
+                    ))}
+                  </TextField>
                   <Box>
-                    <Typography variant="caption" color="text.secondary">Labels</Typography>
-                    <Stack direction="row" spacing={0.5} flexWrap="wrap" useFlexGap sx={{ mt: 0.5, mb: 1 }}>
-                      {(full?.labels ?? []).map((tl: any) => (
-                        <Chip key={tl.label.id} size="small" label={tl.label.name}
-                          sx={{ bgcolor: tl.label.color, color: "#fff" }}
-                          onDelete={() => removeLabel(tl.label.id)} />
-                      ))}
-                      {(full?.labels ?? []).length === 0 && <Typography variant="caption" color="text.secondary">None</Typography>}
-                    </Stack>
-                    <Select size="small" fullWidth displayEmpty value=""
-                      onChange={(e) => e.target.value !== "" && addLabel(Number(e.target.value))}>
-                      <MenuItem value="" disabled>Add label…</MenuItem>
-                      {allLabels
-                        .filter((l) => !(full?.labels ?? []).some((tl: any) => tl.label.id === l.id))
-                        .map((l) => <MenuItem key={l.id} value={l.id}>{l.name}</MenuItem>)}
-                    </Select>
+                    {(full?.labels ?? []).length > 0 && (
+                      <Stack direction="row" spacing={0.5} flexWrap="wrap" useFlexGap sx={{ mb: 1 }}>
+                        {(full?.labels ?? []).map((tl: any) => (
+                          <Chip key={tl.label.id} size="small" label={tl.label.name}
+                            sx={{ bgcolor: tl.label.color, color: "#fff" }}
+                            onDelete={() => removeLabel(tl.label.id)} />
+                        ))}
+                      </Stack>
+                    )}
+                    {(() => {
+                      const available = allLabels.filter((l) => !(full?.labels ?? []).some((tl: any) => tl.label.id === l.id));
+                      return (
+                        <TextField select label="Labels" size="small" fullWidth value=""
+                          onChange={(e) => e.target.value !== "" && addLabel(Number(e.target.value))}
+                          SelectProps={{ displayEmpty: true, renderValue: () => (available.length ? "Add a label…" : "No labels available") }}>
+                          {/* Hidden empty option anchors the value="" so MUI doesn't warn. */}
+                          <MenuItem value="" sx={{ display: "none" }} />
+                          {available.map((l) => <MenuItem key={l.id} value={l.id}>{l.name}</MenuItem>)}
+                        </TextField>
+                      );
+                    })()}
                   </Box>
+                  <Divider sx={{ my: 0.5 }} />
                   <MetaRow icon={<BusinessIcon fontSize="small" />} label="Source" value={source} />
                   <MetaRow icon={<CalendarTodayIcon fontSize="small" />} label="Created" value={created} />
                 </Stack>
@@ -453,7 +451,7 @@ const TicketDialog: React.FC<TicketDialogProps> = ({ ticket, open, onClose, note
 
             {/* Linked devices */}
             <Card sx={{ mt: 2 }}>
-              <CardContent>
+              <CardContent sx={{ p: 2, "&:last-child": { pb: 2 } }}>
                 <Typography variant="subtitle2" color="text.secondary" gutterBottom>
                   Devices {devices.length > 0 && `(${devices.length})`}
                 </Typography>
@@ -546,7 +544,7 @@ const TicketDialog: React.FC<TicketDialogProps> = ({ ticket, open, onClose, note
             {/* Integration-aware panel */}
             {hasIntegrations && (
               <Card sx={{ mt: 2 }}>
-                <CardContent>
+                <CardContent sx={{ p: 2, "&:last-child": { pb: 2 } }}>
                   <Typography variant="subtitle2" color="text.secondary" gutterBottom>Integrations</Typography>
                   <Stack spacing={1}>
                     {source !== "local" && (
@@ -712,7 +710,7 @@ function TimeCard({ minutes, entries, onLog, onLogRange, onDelete, onEdit }: Tim
 
   return (
     <Card sx={{ mt: 2 }}>
-      <CardContent>
+      <CardContent sx={{ p: 2, "&:last-child": { pb: 2 } }}>
         <Stack direction="row" alignItems="baseline" justifyContent="space-between" sx={{ mb: 1 }}>
           <Typography variant="subtitle2" color="text.secondary">Time logged</Typography>
           <Typography variant="h5" sx={{ fontWeight: 700 }}>{fmtMinutes(minutes)}</Typography>
@@ -833,7 +831,7 @@ function AttachmentsCard({
 
   return (
     <Card sx={{ mt: 2 }}>
-      <CardContent>
+      <CardContent sx={{ p: 2, "&:last-child": { pb: 2 } }}>
         <Typography variant="subtitle2" color="text.secondary" gutterBottom>
           Attachments {attachments.length > 0 && `(${attachments.length})`}
         </Typography>

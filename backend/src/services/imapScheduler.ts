@@ -14,7 +14,10 @@ async function tick(log: FastifyBaseLogger) {
     const results = await pollAll();
     for (const r of results) {
       if (r.error) log.warn(`imap[${r.mailbox}]: ${r.error}`);
-      else if (r.processed) log.info(`imap[${r.mailbox}]: ${r.created} new tickets, ${r.appended} replies`);
+      else if (r.processed) {
+        const dup = r.skipped ? `, ${r.skipped} duplicates skipped` : '';
+        log.info(`imap[${r.mailbox}]: ${r.created} new tickets, ${r.appended} replies${dup}`);
+      }
     }
   } catch (err) {
     log.error(`imapScheduler tick failed: ${err}`);

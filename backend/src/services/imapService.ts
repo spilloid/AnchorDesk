@@ -29,6 +29,8 @@ export interface PollResult {
   processed: number;
   created: number;
   appended: number;
+  /** Messages skipped as already-ingested duplicates (same Message-ID). */
+  skipped: number;
   error?: string;
 }
 
@@ -47,8 +49,20 @@ function bodyOf(parsed: ParsedMail): string {
   return '(no body)';
 }
 
-async function ingest(parsed: ParsedMail, mb: Mailbox, uid: number): Promise<'created' | 'appended'> {
+async function ingest(parsed: ParsedMail, mb: Mailbox, uid: number): Promise<'created' | 'appended' | 'duplicate'> {
   const messageId = clamp(parsed.messageId || `<imap-${mb.id}-${uid}@local>`, 255);
+
+  // Idempotency on the message's OWN Message-ID. The same email is routinely
+  // delivered to two monitored mailboxes (e.g. help@ + a personal alias) under a
+  // single Message-ID, and a re-poll can replay a UID. We store that Message-ID
+  // as the ingested note's externalId (and the root ticket's external_id), so if a
+  // note already carries it the message is fully ingested — skip it. Without this
+  // guard the second delivery collides on the (external_id, external_provider)
+  // unique index, 500s the whole poll (Prisma P2002), and — because lastUid never
+  // advances past it — wedges the mailbox on that "poison" message forever.
+  const seen = await prisma.note.findFirst({ where: { externalId: messageId }, select: { id: true } });
+  if (seen) return 'duplicate';
+
   const fromText = parsed.from?.text || 'unknown sender';
   const body = bodyOf(parsed);
   const subject = parsed.subject || '(no subject)';
@@ -84,22 +98,37 @@ async function ingest(parsed: ParsedMail, mb: Mailbox, uid: number): Promise<'cr
   if (ticketId) {
     outcome = 'appended';
   } else {
-    const ticket = await ticketRepo.create(
-      {
-        title: clamp(subject, 255),
-        summary: clamp(body, 200),
-        description: body,
-        companyName: mb.companyName ?? undefined,
-        source: 'imap',
-        externalId: messageId,
-        externalProvider: 'imap',
-      },
-      'imap'
-    );
-    ticketId = ticket.id;
-    // Tag the new ticket with this mailbox's label (catchall vs help@ vs personal).
-    if (mb.labelId) await labelRepo.applyToTicket(ticket.id, mb.labelId).catch(() => {});
-    outcome = 'created';
+    try {
+      const ticket = await ticketRepo.create(
+        {
+          title: clamp(subject, 255),
+          summary: clamp(body, 200),
+          description: body,
+          companyName: mb.companyName ?? undefined,
+          source: 'imap',
+          externalId: messageId,
+          externalProvider: 'imap',
+        },
+        'imap'
+      );
+      ticketId = ticket.id;
+      // Tag the new ticket with this mailbox's label (catchall vs help@ vs personal).
+      if (mb.labelId) await labelRepo.applyToTicket(ticket.id, mb.labelId).catch(() => {});
+      outcome = 'created';
+    } catch (err) {
+      // Belt-and-suspenders for the (external_id, external_provider) unique index:
+      // a concurrent/earlier ingest created this root ticket but left no matching
+      // note for the idempotency check above to catch. Recover by appending to the
+      // existing ticket rather than failing the whole poll.
+      if ((err as { code?: string }).code !== 'P2002') throw err;
+      const existing = await prisma.ticket.findFirst({
+        where: { externalId: messageId, externalProvider: 'imap' },
+        select: { id: true },
+      });
+      if (!existing) throw err;
+      ticketId = existing.id;
+      outcome = 'appended';
+    }
   }
 
   // Store attachments (incl. inline images), then rewrite cid: refs in the HTML
@@ -181,9 +210,34 @@ function rewriteCidRefs(html: string, stored: StoredAttachment[]): string {
   return out;
 }
 
+/**
+ * Turn an ImapFlow error into something actionable. ImapFlow's `.message` for a
+ * rejected command is just "Command failed" — the real reason lives in
+ * `.responseText` / `.serverResponseCode` / `.authenticationFailed`. Surfacing
+ * those is the difference between "Command failed" and "Authentication failed —
+ * check the app-specific password / IMAP access" in the mailbox's last error.
+ */
+function describeImapError(err: unknown): string {
+  const e = err as {
+    message?: string;
+    responseText?: string;
+    serverResponseCode?: string;
+    authenticationFailed?: boolean;
+    code?: string;
+  };
+  const parts: string[] = [];
+  if (e.authenticationFailed) parts.push('Authentication failed');
+  if (e.responseText) parts.push(e.responseText);
+  else if (e.message) parts.push(e.message);
+  if (e.serverResponseCode) parts.push(`[${e.serverResponseCode}]`);
+  else if (e.code && e.code !== e.serverResponseCode) parts.push(`[${e.code}]`);
+  const msg = parts.join(' ').trim();
+  return msg || 'Unknown IMAP error';
+}
+
 /** Poll one mailbox for new mail. Connection errors are captured, not thrown. */
 export async function pollMailbox(mb: Mailbox): Promise<PollResult> {
-  const result: PollResult = { mailbox: mb.name, processed: 0, created: 0, appended: 0 };
+  const result: PollResult = { mailbox: mb.name, processed: 0, created: 0, appended: 0, skipped: 0 };
   const password = mailboxRepo.password(mb);
   if (!password) {
     result.error = 'No password configured';
@@ -213,7 +267,8 @@ export async function pollMailbox(mb: Mailbox): Promise<PollResult> {
           const outcome = await ingest(parsed, mb, msg.uid);
           result.processed++;
           if (outcome === 'created') result.created++;
-          else result.appended++;
+          else if (outcome === 'appended') result.appended++;
+          else result.skipped++;
         }
         if (msg.uid > highest) highest = msg.uid;
       }
@@ -223,7 +278,7 @@ export async function pollMailbox(mb: Mailbox): Promise<PollResult> {
     await client.logout();
     await mailboxRepo.recordPoll(mb.id, highest, null);
   } catch (err) {
-    result.error = (err as Error).message;
+    result.error = describeImapError(err);
     await mailboxRepo.recordPoll(mb.id, highest > (mb.lastUid ?? 0) ? highest : undefined, result.error);
     try {
       await client.close();
