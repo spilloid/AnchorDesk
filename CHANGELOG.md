@@ -1,5 +1,23 @@
 # Changelog
 
+## 1.12.0 — 2026-06-26 — Clockwork (minor)
+
+### Added
+
+- **My Day** — a per-tech day-spread of logged time (new **Time → My Day** nav). Windowed time entries sit on a vertical clock with overlap-aware lane packing; the unlogged spans between them render as labelled **gap bands** so holes in the day pop. Duration-only entries get a side tray and still count toward the total. Day nav, a live "now" line, and a logged-vs-gap summary; clicking a block opens the ticket. New endpoint `GET /me/time-entries` (client sends local day bounds so the day respects the tech's timezone).
+- **Company-scoped device linking.** A ticket's "Link a device" picker is scoped to the ticket's company so another company's hardware can't be mis-associated; unassigned devices stay visible, with a **"show all companies (N hidden)"** escape hatch.
+- **Network → company association.** Admin → Devices gains an inline **Company** column to assign/clear a device's company (via existing `PATCH /devices/:id`; no schema change).
+
+### Fixed
+
+- **Email-signature editor crash.** Account → Email signature crashed the page. The editor passed `editorProps: undefined` when no image-upload handler was supplied (the signature case); TipTap v3 builds the ProseMirror view from those props and dies on `dispatchTransaction`. The editor now always passes a props object. Also de-duplicated the `Link` extension (StarterKit v3 bundles it) and set `immediatelyRender: false`.
+
+### Changed
+
+- **Dev proxy host-friendly.** Vite dev proxy target is configurable via `BACKEND_ORIGIN` (defaults to the compose service name `backend`; set `http://localhost:8060` for host dev).
+
+See [RELEASE_NOTES_v1.12.0.md](RELEASE_NOTES_v1.12.0.md) for the full release notes.
+
 ## 1.11.2 — 2026-06-26 — Polish (patch)
 
 ### Added

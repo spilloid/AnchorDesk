@@ -84,7 +84,7 @@ const RichTextEditor: React.FC<RichTextEditorProps> = ({ value, onChange, minHei
   const editor = useEditor({
     // StarterKit v3 bundles the Link extension, so configure it here rather than
     // registering a second `Link` — duplicate extension names collide on
-    // ProseMirror plugin keys and crash the editor (the signature-dialog bug).
+    // ProseMirror plugin keys.
     extensions: [
       StarterKit.configure({ link: { openOnClick: false, autolink: true } }),
       Image.configure({ inline: false, HTMLAttributes: { loading: "lazy" } }),
@@ -93,6 +93,10 @@ const RichTextEditor: React.FC<RichTextEditorProps> = ({ value, onChange, minHei
     // React 18: don't render the editor during the initial render pass.
     immediatelyRender: false,
     onUpdate: ({ editor }) => onChange(editor.getHTML()),
+    // NB: always an object. Passing `editorProps: undefined` makes TipTap v3
+    // build the ProseMirror view with undefined props and crash on
+    // `dispatchTransaction` — this is the signature-dialog "DOM explodes" bug
+    // (the composer only worked because it passed onImageUpload → a props object).
     editorProps: onImageUpload
       ? {
           handlePaste: (_view, event) => {
@@ -110,7 +114,7 @@ const RichTextEditor: React.FC<RichTextEditorProps> = ({ value, onChange, minHei
             return true;
           },
         }
-      : undefined,
+      : {},
   });
 
   // Keep a ref for the async insert callbacks.

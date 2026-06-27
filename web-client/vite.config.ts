@@ -6,6 +6,13 @@ import { readFileSync } from 'fs'
 // running (answers "did the deploy land?" at a glance — see AccountMenu).
 const { version } = JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf-8'))
 
+// Backend origin the dev proxy forwards to. Defaults to the Docker compose
+// service name (`backend`) so the in-container dev server works out of the box;
+// set BACKEND_ORIGIN=http://localhost:8060 when running the dev server on the
+// host (where `backend` won't resolve).
+const backendOrigin = process.env.BACKEND_ORIGIN || 'http://backend:8060'
+const backendWs = backendOrigin.replace(/^http/, 'ws')
+
 // https://vitejs.dev/config/
 export default defineConfig({
   define: {
@@ -16,16 +23,16 @@ export default defineConfig({
     port: 5173,
     proxy: {
       '/api': {
-        target: 'http://backend:8060/',
+        target: backendOrigin,
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/api/, ''),
       },
       // Probe self-service + MCP keep their paths (backend serves them at root).
-      '/probe': { target: 'http://backend:8060/', changeOrigin: true },
-      '/mcp': { target: 'http://backend:8060/', changeOrigin: true },
+      '/probe': { target: backendOrigin, changeOrigin: true },
+      '/mcp': { target: backendOrigin, changeOrigin: true },
       // WebSocket live-update channel — the /api prefix is stripped to /ws.
       '/api/ws': {
-        target: 'ws://backend:8060/',
+        target: backendWs,
         ws: true,
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/api/, ''),

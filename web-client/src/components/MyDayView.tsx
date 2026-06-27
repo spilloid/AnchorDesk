@@ -214,16 +214,17 @@ export default function MyDayView({ onOpenTicket }: Props) {
                     <Box key={h.getTime()} sx={{ position: "absolute", left: 0, right: 0, top: topFor(h), borderTop: 1, borderColor: "divider", opacity: 0.5 }} />
                   ))}
 
-                  {/* Gap bands (behind blocks) */}
+                  {/* Gap bands (behind blocks). The tint lives on a backing layer
+                      so the label keeps full contrast instead of being faded. */}
                   {gaps.map((g, i) => (
                     <Box key={`gap-${i}`} sx={{
                       position: "absolute", left: 4, right: 4,
                       top: topFor(g.start), height: minToPx(g.minutes),
-                      bgcolor: "warning.light", opacity: 0.18,
                       border: "1px dashed", borderColor: "warning.main", borderRadius: 1,
-                      display: "grid", placeItems: "center",
+                      display: "grid", placeItems: "center", overflow: "hidden",
                     }}>
-                      <Typography variant="caption" sx={{ color: "warning.dark", fontWeight: 600 }}>
+                      <Box sx={{ position: "absolute", inset: 0, bgcolor: "warning.light", opacity: 0.25 }} />
+                      <Typography variant="caption" sx={{ color: "warning.dark", fontWeight: 700, zIndex: 1 }}>
                         {fmtMins(g.minutes)} gap
                       </Typography>
                     </Box>
