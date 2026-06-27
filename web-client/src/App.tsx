@@ -400,7 +400,11 @@ function App() {
             <>
           {error && <Typography color="error">Error: {error.message}</Typography>}
 
-          {loading ? (
+          {/* Only blank to a spinner on the first load (nothing to show yet).
+              Background refetches — live WebSocket updates, an optimistic close —
+              keep the current board on screen and swap data in place, so the view
+              never flashes out from under the user. */}
+          {loading && tickets.length === 0 ? (
             <CircularProgress />
           ) : viewMode === "table" ? (
             // DataGrid is virtualized + paginates server-side; it renders its own
